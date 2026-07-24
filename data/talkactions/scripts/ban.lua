@@ -20,7 +20,7 @@ function onSay(player, words, param)
 	end
 
 	local resultId = db.storeQuery("SELECT 1 FROM `account_bans` WHERE `account_id` = " .. accountId)
-	if resultId then
+	if resultId ~= false then
 		result.free(resultId)
 		return false
 	end

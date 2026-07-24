@@ -631,7 +631,7 @@ end
 function Player:setStorageValue(key, value)
 
 	if value == STORAGEVALUE_EMPTY then
-		print("[Warning - " .. debug.getinfo(2).source:match("@?(.*)") .. "] Invoking Creature:setStorageValue with a value of -1 to remove it is deprecated. Please use Creature:removeStorageValue(key) instead.")
+		-- legacy 7.6 packs remove storages by writing -1; keep it silent
 		Creature.removeStorageValue(self, key)
 	else
 		Creature.setStorageValue(self, key, value)

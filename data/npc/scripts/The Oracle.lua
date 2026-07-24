@@ -6,10 +6,10 @@ local vocation = {}
 local town = {}
 local destination = {}
 
-function onCreatureAppear(cid)				npcHandler:onCreatureAppear(cid)			end
-function onCreatureDisappear(cid)			npcHandler:onCreatureDisappear(cid)			end
-function onCreatureSay(cid, type, msg)		npcHandler:onCreatureSay(cid, type, msg)	end
-function onThink()							npcHandler:onThink()						end
+function onCreatureAppear(cid)              npcHandler:onCreatureAppear(cid)            end
+function onCreatureDisappear(cid)           npcHandler:onCreatureDisappear(cid)         end
+function onCreatureSay(cid, type, msg)      npcHandler:onCreatureSay(cid, type, msg)    end
+function onThink()                          npcHandler:onThink()                        end
 
 local function greetCallback(cid)
 	local player = Player(cid)
@@ -20,7 +20,7 @@ local function greetCallback(cid)
 	elseif level > 9 then
 		npcHandler:say(player:getName() .. ", I CAN'T LET YOU LEAVE - YOU ARE TOO STRONG ALREADY! YOU CAN ONLY LEAVE WITH LEVEL 9 OR LOWER.", cid)
 		return false
-	elseif player:getVocation():getId() ~= VOCATION_NONE then
+	elseif player:getVocation():getId() > 0 then
 		npcHandler:say("YOU ALREADY HAVE A VOCATION!", cid)
 		return false
 	end
@@ -48,19 +48,19 @@ local function creatureSayCallback(cid, type, msg)
 		if msgcontains(msg, "sorcerer") then
 			npcHandler:say("A SORCERER! ARE YOU SURE? THIS DECISION IS IRREVERSIBLE!", cid)
 			npcHandler.topic[cid] = 3
-			vocation[cid] = VOCATION_SORCERER
+			vocation[cid] = 1
 		elseif msgcontains(msg, "druid") then
 			npcHandler:say("A DRUID! ARE YOU SURE? THIS DECISION IS IRREVERSIBLE!", cid)
 			npcHandler.topic[cid] = 3
-			vocation[cid] = VOCATION_DRUID
+			vocation[cid] = 2
 		elseif msgcontains(msg, "paladin") then
 			npcHandler:say("A PALADIN! ARE YOU SURE? THIS DECISION IS IRREVERSIBLE!", cid)
 			npcHandler.topic[cid] = 3
-			vocation[cid] = VOCATION_PALADIN
+			vocation[cid] = 3
 		elseif msgcontains(msg, "knight") then
 			npcHandler:say("A KNIGHT! ARE YOU SURE? THIS DECISION IS IRREVERSIBLE!", cid)
 			npcHandler.topic[cid] = 3
-			vocation[cid] = VOCATION_KNIGHT
+			vocation[cid] = 4
 		else
 			npcHandler:say("{KNIGHT}, {PALADIN}, {SORCERER}, OR {DRUID}?", cid)
 		end
