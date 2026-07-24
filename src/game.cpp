@@ -65,6 +65,10 @@ void Game::start(ServiceManager* manager)
 {
 	serviceManager = manager;
 
+	updateWorldTime();
+	updateWorldLightLevel();
+
+	g_scheduler.addEvent(createSchedulerTask(EVENT_LIGHTINTERVAL, [this]() { checkLight(); }));
 	g_scheduler.addEvent(createSchedulerTask(EVENT_CREATURE_THINK_INTERVAL, [this]() { checkCreatures(0); }));
 	g_scheduler.addEvent(createSchedulerTask(EVENT_DECAYINTERVAL, [this]() { checkDecay(); }));
 }
@@ -2765,7 +2769,7 @@ bool Game::internalStartTrade(Player* player, Player* tradePartner, Item* tradeI
 	player->sendTradeItemRequest(player->getName(), tradeItem, true);
 
 	if (tradePartner->tradeState == TRADE_NONE) {
-		tradePartner->sendTextMessage(MESSAGE_TRADE, fmt::format("{:s} wants to trade with you.", player->getName()));
+		tradePartner->sendTextMessage(MESSAGE_EVENT_ADVANCE, fmt::format("{:s} wants to trade with you.", player->getName()));
 		tradePartner->tradeState = TRADE_ACKNOWLEDGE;
 		tradePartner->tradePartner = player;
 	} else {
@@ -3531,11 +3535,6 @@ void Game::playerSay(uint32_t playerId, uint16_t channelId, SpeakClasses type, c
 		return;
 	}
 
-	if (type == TALKTYPE_PRIVATE_PN) {
-		playerSpeakToNpc(player, text);
-		return;
-	}
-
 	uint32_t muteTime = player->isMuted();
 	if (muteTime > 0) {
 		player->sendTextMessage(MESSAGE_STATUS_SMALL, fmt::format("You are still muted for {:d} seconds.", muteTime));
@@ -3561,14 +3560,15 @@ void Game::playerSay(uint32_t playerId, uint16_t channelId, SpeakClasses type, c
 			playerYell(player, text);
 			break;
 
-		case TALKTYPE_PRIVATE_TO:
-		case TALKTYPE_PRIVATE_RED_TO:
+		case TALKTYPE_PRIVATE:
+		case TALKTYPE_PRIVATE_RED:
 			playerSpeakTo(player, type, receiver, text);
 			break;
 
 		case TALKTYPE_CHANNEL_O:
 		case TALKTYPE_CHANNEL_Y:
 		case TALKTYPE_CHANNEL_R1:
+		case TALKTYPE_CHANNEL_R2:
 			g_chat->talkToChannel(*player, type, text, channelId);
 			break;
 
@@ -3593,7 +3593,7 @@ bool Game::playerSaySpell(Player* player, SpeakClasses type, const std::string& 
 	result = g_spells->playerSaySpell(player, words);
 	if (result == TALKACTION_BREAK) {
 		if (!getBoolean(ConfigManager::EMOTE_SPELLS)) {
-			return internalCreatureSay(player, TALKTYPE_SPELL, words, false);
+			return internalCreatureSay(player, TALKTYPE_SAY, words, false);
 		}
 		return internalCreatureSay(player, TALKTYPE_MONSTER_SAY, words, false);
 	} else if (result == TALKACTION_FAILED) {
@@ -3668,11 +3668,11 @@ bool Game::playerSpeakTo(Player* player, SpeakClasses type, const std::string& r
 		return false;
 	}
 
-	if (type == TALKTYPE_PRIVATE_RED_TO &&
+	if (type == TALKTYPE_PRIVATE_RED &&
 	    (player->hasFlag(PlayerFlag_CanTalkRedPrivate) || player->getAccountType() >= ACCOUNT_TYPE_GAMEMASTER)) {
-		type = TALKTYPE_PRIVATE_RED_FROM;
+		type = TALKTYPE_PRIVATE_RED;
 	} else {
-		type = TALKTYPE_PRIVATE_FROM;
+		type = TALKTYPE_PRIVATE;
 	}
 
 	if (!player->isAccessPlayer() && !player->hasFlag(PlayerFlag_IgnoreSendPrivateCheck)) {
@@ -3713,7 +3713,7 @@ void Game::playerSpeakToNpc(Player* player, const std::string& text)
 	map.getSpectators(spectators, player->getPosition());
 	for (Creature* spectator : spectators) {
 		if (spectator->getNpc()) {
-			spectator->onCreatureSay(player, TALKTYPE_PRIVATE_PN, text);
+			spectator->onCreatureSay(player, TALKTYPE_PRIVATE, text);
 		}
 	}
 }
@@ -4191,10 +4191,10 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 				Player* spectatorPlayer = static_cast<Player*>(spectator);
 				if (spectatorPlayer == attackerPlayer && attackerPlayer != targetPlayer) {
-					message.type = MESSAGE_HEALED;
+					message.type = MESSAGE_EVENT_DEFAULT;
 					message.text = fmt::format("You heal {:s} for {:s}.", target->getNameDescription(), damageString);
 				} else if (spectatorPlayer == targetPlayer) {
-					message.type = MESSAGE_HEALED;
+					message.type = MESSAGE_EVENT_DEFAULT;
 					if (!attacker) {
 						message.text = fmt::format("You were healed for {:s}.", damageString);
 					} else if (targetPlayer == attackerPlayer) {
@@ -4204,7 +4204,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 						                           damageString);
 					}
 				} else {
-					message.type = MESSAGE_HEALED_OTHERS;
+					message.type = MESSAGE_EVENT_DEFAULT;
 					if (spectatorMessage.empty()) {
 						if (!attacker) {
 							spectatorMessage =
@@ -4222,7 +4222,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 					}
 					message.text = spectatorMessage;
 				}
-				spectatorPlayer->sendTextMessage(message);
+				spectatorPlayer->sendCombatMessage(message);
 			}
 		}
 	} else {
@@ -4298,8 +4298,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 				std::string spectatorMessage;
 
-				message.primary.value = manaDamage;
-				message.primary.color = TEXTCOLOR_BLUE;
+				ColoredText coloredText(std::to_string(manaDamage), targetPos, TEXTCOLOR_BLUE);
 
 				for (Creature* spectator : spectators) {
 					assert(dynamic_cast<Player*>(spectator) != nullptr);
@@ -4310,12 +4309,12 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 					}
 
 					if (spectatorPlayer == attackerPlayer && attackerPlayer != targetPlayer) {
-						message.type = MESSAGE_DAMAGE_DEALT;
+						message.type = MESSAGE_EVENT_DEFAULT;
 						message.text = fmt::format("{:s} loses {:d} mana due to your attack.",
 						                           target->getNameDescription(), manaDamage);
 						message.text[0] = std::toupper(message.text[0]);
 					} else if (spectatorPlayer == targetPlayer) {
-						message.type = MESSAGE_DAMAGE_RECEIVED;
+						message.type = MESSAGE_EVENT_DEFAULT;
 						if (!attacker) {
 							message.text = fmt::format("You lose {:d} mana.", manaDamage);
 						} else if (targetPlayer == attackerPlayer) {
@@ -4325,7 +4324,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 							                           attacker->getNameDescription());
 						}
 					} else {
-						message.type = MESSAGE_DAMAGE_OTHERS;
+						message.type = MESSAGE_EVENT_DEFAULT;
 						if (spectatorMessage.empty()) {
 							if (!attacker) {
 								spectatorMessage =
@@ -4343,7 +4342,8 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 						}
 						message.text = spectatorMessage;
 					}
-					spectatorPlayer->sendTextMessage(message);
+					spectatorPlayer->sendCombatMessage(message);
+					spectatorPlayer->sendColoredText(coloredText);
 				}
 
 				damage.primary.value -= manaDamage;
@@ -4407,19 +4407,11 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 			map.getSpectators(spectators, targetPos, true, true);
 		}
 
-		message.primary.value = damage.primary.value;
-		message.secondary.value = damage.secondary.value;
+		ColoredText coloredText(std::to_string(realDamage), targetPos, TEXTCOLOR_NONE);
 
 		uint8_t hitEffect;
-		if (message.primary.value) {
-			combatGetTypeInfo(damage.primary.type, target, message.primary.color, hitEffect);
-			if (hitEffect != CONST_ME_NONE) {
-				addMagicEffect(spectators, targetPos, hitEffect);
-			}
-		}
-
-		if (message.secondary.value) {
-			combatGetTypeInfo(damage.secondary.type, target, message.secondary.color, hitEffect);
+		if (damage.primary.value) {
+			combatGetTypeInfo(damage.primary.type, target, coloredText.color, hitEffect);
 			if (hitEffect != CONST_ME_NONE) {
 				addMagicEffect(spectators, targetPos, hitEffect);
 			}
@@ -4445,7 +4437,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 			}
 		}
 
-		if (message.primary.color != TEXTCOLOR_NONE || message.secondary.color != TEXTCOLOR_NONE) {
+		if (coloredText.color != TEXTCOLOR_NONE) {
 			auto damageString = fmt::format("{:d} hitpoint{:s}", realDamage, realDamage != 1 ? "s" : "");
 
 			std::string spectatorMessage;
@@ -4459,12 +4451,12 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 				}
 
 				if (spectatorPlayer == attackerPlayer && attackerPlayer != targetPlayer) {
-					message.type = MESSAGE_DAMAGE_DEALT;
+					message.type = MESSAGE_EVENT_DEFAULT;
 					message.text =
 					    fmt::format("{:s} loses {:s} due to your attack.", target->getNameDescription(), damageString);
 					message.text[0] = std::toupper(message.text[0]);
 				} else if (spectatorPlayer == targetPlayer) {
-					message.type = MESSAGE_DAMAGE_RECEIVED;
+					message.type = MESSAGE_EVENT_DEFAULT;
 					if (!attacker) {
 						message.text = fmt::format("You lose {:s}.", damageString);
 					} else if (targetPlayer == attackerPlayer) {
@@ -4474,7 +4466,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 						                           attacker->getNameDescription());
 					}
 				} else {
-					message.type = MESSAGE_DAMAGE_OTHERS;
+					message.type = MESSAGE_EVENT_DEFAULT;
 					if (spectatorMessage.empty()) {
 						if (!attacker) {
 							spectatorMessage =
@@ -4492,7 +4484,8 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 					}
 					message.text = spectatorMessage;
 				}
-				spectatorPlayer->sendTextMessage(message);
+				spectatorPlayer->sendCombatMessage(message);
+				spectatorPlayer->sendColoredText(coloredText);
 			}
 		}
 
@@ -4544,11 +4537,8 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 		realManaChange = targetPlayer->getMana() - realManaChange;
 
 		if (realManaChange > 0 && !targetPlayer->isInGhostMode()) {
-			TextMessage message(MESSAGE_HEALED, "You gained " + std::to_string(realManaChange) + " mana.");
-			message.position = target->getPosition();
-			message.primary.value = realManaChange;
-			message.primary.color = TEXTCOLOR_MAYABLUE;
-			targetPlayer->sendTextMessage(message);
+			targetPlayer->sendTextMessage(MESSAGE_EVENT_DEFAULT,
+			                              "You gained " + std::to_string(realManaChange) + " mana.");
 		}
 	} else {
 		const Position& targetPos = target->getPosition();
@@ -4598,9 +4588,8 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 		std::string spectatorMessage;
 
 		TextMessage message;
-		message.position = targetPos;
-		message.primary.value = manaLoss;
-		message.primary.color = TEXTCOLOR_BLUE;
+
+		ColoredText coloredText(std::to_string(manaLoss), targetPos, TEXTCOLOR_BLUE);
 
 		SpectatorVec spectators;
 		map.getSpectators(spectators, targetPos, false, true);
@@ -4609,12 +4598,12 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 
 			Player* spectatorPlayer = static_cast<Player*>(spectator);
 			if (spectatorPlayer == attackerPlayer && attackerPlayer != targetPlayer) {
-				message.type = MESSAGE_DAMAGE_DEALT;
+				message.type = MESSAGE_EVENT_DEFAULT;
 				message.text =
 				    fmt::format("{:s} loses {:d} mana due to your attack.", target->getNameDescription(), manaLoss);
 				message.text[0] = std::toupper(message.text[0]);
 			} else if (spectatorPlayer == targetPlayer) {
-				message.type = MESSAGE_DAMAGE_RECEIVED;
+				message.type = MESSAGE_EVENT_DEFAULT;
 				if (!attacker) {
 					message.text = fmt::format("You lose {:d} mana.", manaLoss);
 				} else if (targetPlayer == attackerPlayer) {
@@ -4624,7 +4613,7 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 					                           attacker->getNameDescription());
 				}
 			} else {
-				message.type = MESSAGE_DAMAGE_OTHERS;
+				message.type = MESSAGE_EVENT_DEFAULT;
 				if (spectatorMessage.empty()) {
 					if (!attacker) {
 						spectatorMessage = fmt::format("{:s} loses {:d} mana.", target->getNameDescription(), manaLoss);
@@ -4641,7 +4630,8 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 				}
 				message.text = spectatorMessage;
 			}
-			spectatorPlayer->sendTextMessage(message);
+			spectatorPlayer->sendCombatMessage(message);
+			spectatorPlayer->sendColoredText(coloredText);
 		}
 	}
 
@@ -4920,6 +4910,54 @@ std::string hexDigest(std::string_view digest)
 }
 
 } // namespace
+
+void Game::setWorldLightInfo(LightInfo lightInfo)
+{
+	lightLevel = lightInfo.level;
+	lightColor = lightInfo.color;
+	for (const auto& it : players) {
+		it.second->sendWorldLight(lightInfo);
+	}
+}
+
+void Game::updateWorldLightLevel()
+{
+	if (getWorldTime() >= GAME_SUNRISE && getWorldTime() <= GAME_DAYTIME) {
+		lightLevel = ((GAME_DAYTIME - GAME_SUNRISE) - (GAME_DAYTIME - getWorldTime())) * float(LIGHT_CHANGE_SUNRISE) +
+		             LIGHT_NIGHT;
+	} else if (getWorldTime() >= GAME_SUNSET && getWorldTime() <= GAME_NIGHTTIME) {
+		lightLevel = LIGHT_DAY - ((getWorldTime() - GAME_SUNSET) * float(LIGHT_CHANGE_SUNSET));
+	} else if (getWorldTime() >= GAME_NIGHTTIME || getWorldTime() < GAME_SUNRISE) {
+		lightLevel = LIGHT_NIGHT;
+	} else {
+		lightLevel = LIGHT_DAY;
+	}
+}
+
+void Game::checkLight()
+{
+	g_scheduler.addEvent(createSchedulerTask(EVENT_LIGHTINTERVAL, [this]() { checkLight(); }));
+
+	uint8_t previousLightLevel = lightLevel;
+	updateWorldLightLevel();
+
+	if (previousLightLevel != lightLevel) {
+		LightInfo lightInfo = getWorldLightInfo();
+
+		for (const auto& it : players) {
+			it.second->sendWorldLight(lightInfo);
+		}
+	}
+}
+
+void Game::updateWorldTime()
+{
+	g_scheduler.addEvent(createSchedulerTask(EVENT_WORLDTIMEINTERVAL, [this]() { updateWorldTime(); }));
+
+	time_t osTime = time(nullptr);
+	tm* timeInfo = localtime(&osTime);
+	worldTime = (timeInfo->tm_sec + (timeInfo->tm_min * 60)) / 2.5f;
+}
 
 void Game::loadMotdNum()
 {
@@ -5252,7 +5290,7 @@ void Game::playerCreateMarketOffer(uint32_t playerId, uint8_t type, uint16_t spr
 	}
 
 	if (getBoolean(ConfigManager::MARKET_PREMIUM) && !player->isPremium()) {
-		player->sendTextMessage(MESSAGE_MARKET, "Only premium accounts may create offers for that object.");
+		player->sendTextMessage(MESSAGE_INFO_DESCR, "Only premium accounts may create offers for that object.");
 		return;
 	}
 
@@ -5418,7 +5456,7 @@ void Game::playerAcceptMarketOffer(uint32_t playerId, uint32_t timestamp, uint16
 
 	uint32_t offerAccountId = IOLoginData::getAccountIdByPlayerId(offer.playerId);
 	if (offerAccountId == player->getAccount()) {
-		player->sendTextMessage(MESSAGE_MARKET, "You cannot accept your own offer.");
+		player->sendTextMessage(MESSAGE_INFO_DESCR, "You cannot accept your own offer.");
 		return;
 	}
 

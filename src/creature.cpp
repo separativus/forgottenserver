@@ -1175,16 +1175,15 @@ void Creature::onGainExperience(uint64_t gainExp, Creature* target)
 		return;
 	}
 
-	TextMessage message(MESSAGE_EXPERIENCE_OTHERS, ucfirst(getNameDescription()) + " gained " +
-	                                                   std::to_string(gainExp) +
-	                                                   (gainExp != 1 ? " experience points." : " experience point."));
-	message.position = position;
-	message.primary.color = TEXTCOLOR_WHITE_EXP;
-	message.primary.value = gainExp;
+	TextMessage message(MESSAGE_STATUS_SMALL, ucfirst(getNameDescription()) + " gained " + std::to_string(gainExp) +
+	                                              (gainExp != 1 ? " experience points." : " experience point."));
+
+	ColoredText coloredText(std::to_string(gainExp), position, TEXTCOLOR_WHITE_EXP);
 
 	for (Creature* spectator : spectators) {
 		assert(dynamic_cast<Player*>(spectator) != nullptr);
 		static_cast<Player*>(spectator)->sendTextMessage(message);
+		static_cast<Player*>(spectator)->sendColoredText(coloredText);
 	}
 }
 

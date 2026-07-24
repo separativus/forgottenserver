@@ -869,12 +869,6 @@ public:
 		}
 	}
 
-	void sendBasicData() const
-	{
-		if (client) {
-			client->sendBasicData();
-		}
-	}
 	void sendSkills() const
 	{
 		if (client) {
@@ -893,6 +887,7 @@ public:
 			client->sendTextMessage(message);
 		}
 	}
+	void sendCombatMessage(const TextMessage& message) const;
 	void sendReLoginWindow(uint8_t unfairFightReduction) const
 	{
 		if (client) {
@@ -1042,16 +1037,16 @@ public:
 			client->sendAddMarker(pos, markType, desc);
 		}
 	}
-	void sendEnterWorld()
+	void sendWorldLight(LightInfo lightInfo)
 	{
 		if (client) {
-			client->sendEnterWorld();
+			client->sendWorldLight(lightInfo);
 		}
 	}
-	void sendFightModes()
+	void sendColoredText(const ColoredText& coloredText) const
 	{
 		if (client) {
-			client->sendFightModes();
+			client->sendColoredText(coloredText);
 		}
 	}
 	void sendNetworkMessage(const NetworkMessage& message)

@@ -1706,34 +1706,17 @@ void LuaScriptInterface::registerFunctions()
 
 	registerEnum(L, ITEM_STACK_SIZE);
 
+	registerEnum(L, MESSAGE_STATUS_CONSOLE_YELLOW);
+	registerEnum(L, MESSAGE_STATUS_CONSOLE_LIGHTBLUE);
+	registerEnum(L, MESSAGE_STATUS_CONSOLE_ORANGE);
 	registerEnum(L, MESSAGE_STATUS_DEFAULT);
 	registerEnum(L, MESSAGE_STATUS_WARNING);
 	registerEnum(L, MESSAGE_EVENT_ADVANCE);
-	registerEnum(L, MESSAGE_STATUS_WARNING2);
 	registerEnum(L, MESSAGE_STATUS_SMALL);
 	registerEnum(L, MESSAGE_INFO_DESCR);
-	registerEnum(L, MESSAGE_DAMAGE_DEALT);
-	registerEnum(L, MESSAGE_DAMAGE_RECEIVED);
-	registerEnum(L, MESSAGE_HEALED);
-	registerEnum(L, MESSAGE_EXPERIENCE);
-	registerEnum(L, MESSAGE_DAMAGE_OTHERS);
-	registerEnum(L, MESSAGE_HEALED_OTHERS);
-	registerEnum(L, MESSAGE_EXPERIENCE_OTHERS);
 	registerEnum(L, MESSAGE_EVENT_DEFAULT);
-	registerEnum(L, MESSAGE_LOOT);
-	registerEnum(L, MESSAGE_TRADE);
-	registerEnum(L, MESSAGE_GUILD);
-	registerEnum(L, MESSAGE_PARTY_MANAGEMENT);
-	registerEnum(L, MESSAGE_PARTY);
-	registerEnum(L, MESSAGE_REPORT);
-	registerEnum(L, MESSAGE_HOTKEY_PRESSED);
-	registerEnum(L, MESSAGE_MARKET);
-	registerEnum(L, MESSAGE_BEYOND_LAST);
-	registerEnum(L, MESSAGE_TOURNAMENT_INFO);
-	registerEnum(L, MESSAGE_ATTENTION);
-	registerEnum(L, MESSAGE_BOOSTED_CREATURE);
-	registerEnum(L, MESSAGE_OFFLINE_TRAINING);
-	registerEnum(L, MESSAGE_TRANSACTION);
+	registerEnum(L, MESSAGE_STATUS_CONSOLE_BLUE);
+	registerEnum(L, MESSAGE_STATUS_CONSOLE_RED);
 
 	registerEnum(L, CREATURETYPE_PLAYER);
 	registerEnum(L, CREATURETYPE_MONSTER);
@@ -1978,21 +1961,18 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(L, TALKTYPE_SAY);
 	registerEnum(L, TALKTYPE_WHISPER);
 	registerEnum(L, TALKTYPE_YELL);
-	registerEnum(L, TALKTYPE_PRIVATE_FROM);
-	registerEnum(L, TALKTYPE_PRIVATE_TO);
+	registerEnum(L, TALKTYPE_PRIVATE);
 	registerEnum(L, TALKTYPE_CHANNEL_Y);
-	registerEnum(L, TALKTYPE_CHANNEL_O);
-	registerEnum(L, TALKTYPE_SPELL);
-	registerEnum(L, TALKTYPE_PRIVATE_NP);
-	registerEnum(L, TALKTYPE_PRIVATE_NP_CONSOLE);
-	registerEnum(L, TALKTYPE_PRIVATE_PN);
+	registerEnum(L, TALKTYPE_RVR_CHANNEL);
+	registerEnum(L, TALKTYPE_RVR_ANSWER);
+	registerEnum(L, TALKTYPE_RVR_CONTINUE);
 	registerEnum(L, TALKTYPE_BROADCAST);
 	registerEnum(L, TALKTYPE_CHANNEL_R1);
-	registerEnum(L, TALKTYPE_PRIVATE_RED_FROM);
-	registerEnum(L, TALKTYPE_PRIVATE_RED_TO);
+	registerEnum(L, TALKTYPE_PRIVATE_RED);
+	registerEnum(L, TALKTYPE_CHANNEL_O);
+	registerEnum(L, TALKTYPE_CHANNEL_R2);
 	registerEnum(L, TALKTYPE_MONSTER_SAY);
 	registerEnum(L, TALKTYPE_MONSTER_YELL);
-	registerEnum(L, TALKTYPE_POTION);
 
 	registerEnum(L, TEXTCOLOR_BLUE);
 	registerEnum(L, TEXTCOLOR_LIGHTGREEN);
@@ -10357,7 +10337,7 @@ int LuaScriptInterface::luaPlayerSendPrivateMessage(lua_State* L)
 
 	const Player* speaker = tfs::lua::getUserdata<const Player>(L, 2);
 	const std::string& text = tfs::lua::getString(L, 3);
-	SpeakClasses type = tfs::lua::getNumber<SpeakClasses>(L, 4, TALKTYPE_PRIVATE_FROM);
+	SpeakClasses type = tfs::lua::getNumber<SpeakClasses>(L, 4, TALKTYPE_PRIVATE);
 	player->sendPrivateMessage(speaker, type, text);
 	tfs::lua::pushBoolean(L, true);
 	return 1;

@@ -297,6 +297,13 @@ public:
 	uint32_t getMotdNum() const { return motdNum; }
 	void incrementMotdNum() { motdNum++; }
 
+	// 7.x world light is server-driven (the 1.6 Lua light lib is not part of
+	// the carried 7.72-era datapack).
+	LightInfo getWorldLightInfo() const { return {lightLevel, lightColor}; }
+	void setWorldLightInfo(LightInfo lightInfo);
+	int16_t getWorldTime() const { return worldTime; }
+	void updateWorldTime();
+
 	void loadPlayersRecord();
 	void checkPlayersRecord();
 
@@ -549,6 +556,23 @@ private:
 
 	std::string motdHash;
 	uint32_t motdNum = 0;
+
+	static constexpr uint8_t LIGHT_DAY = 250;
+	static constexpr uint8_t LIGHT_NIGHT = 40;
+	static constexpr int16_t GAME_SUNRISE = 360;
+	static constexpr int16_t GAME_DAYTIME = 480;
+	static constexpr int16_t GAME_SUNSET = 1080;
+	static constexpr int16_t GAME_NIGHTTIME = 1200;
+	static constexpr float LIGHT_CHANGE_SUNRISE =
+	    static_cast<int>(float(float(LIGHT_DAY - LIGHT_NIGHT) / float(GAME_DAYTIME - GAME_SUNRISE)) * 100) / 100.0f;
+	static constexpr float LIGHT_CHANGE_SUNSET =
+	    static_cast<int>(float(float(LIGHT_DAY - LIGHT_NIGHT) / float(GAME_NIGHTTIME - GAME_SUNSET)) * 100) / 100.0f;
+
+	uint8_t lightLevel = LIGHT_DAY;
+	uint8_t lightColor = 215;
+	int16_t worldTime = 0;
+
+	void updateWorldLightLevel();
 };
 
 #endif // FS_GAME_H

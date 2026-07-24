@@ -866,6 +866,23 @@ void Player::sendStats()
 	}
 }
 
+void Player::sendCombatMessage(const TextMessage& message) const
+{
+	// TibiaFun: combat hit/heal lines go to the "Log" channel window while the
+	// player has it open (the default; login.lua opens it) and fall back to the
+	// normal console message when that window is closed.
+	if (!client) {
+		return;
+	}
+
+	ChatChannel* channel = g_chat->getChannelById(CHANNEL_LOG);
+	if (channel && channel->hasUser(*this)) {
+		client->sendLogMessage(message.text);
+	} else {
+		client->sendTextMessage(message);
+	}
+}
+
 void Player::sendPing()
 {
 	int64_t timeNow = OTSYS_TIME();
@@ -1750,6 +1767,29 @@ void Player::addExperience(Creature* source, uint64_t exp, bool sendText /* = fa
 
 	experience += exp;
 
+	if (sendText) {
+		std::string expString = std::to_string(exp) + (exp != 1 ? " experience points." : " experience point.");
+
+		TextMessage message(MESSAGE_EVENT_DEFAULT, "You gained " + expString);
+		sendTextMessage(message);
+
+		ColoredText coloredText(std::to_string(exp), position, TEXTCOLOR_WHITE_EXP);
+		sendColoredText(coloredText);
+
+		SpectatorVec spectators;
+		g_game.map.getSpectators(spectators, position, false, true);
+		spectators.erase(this);
+		if (!spectators.empty()) {
+			message.type = MESSAGE_STATUS_SMALL;
+			message.text = getName() + " gained " + expString;
+			for (Creature* spectator : spectators) {
+				assert(dynamic_cast<Player*>(spectator) != nullptr);
+				static_cast<Player*>(spectator)->sendTextMessage(message);
+				static_cast<Player*>(spectator)->sendColoredText(coloredText);
+			}
+		}
+	}
+
 	uint32_t prevLevel = level;
 	while (experience >= nextLevelExp) {
 		++level;
@@ -1821,21 +1861,22 @@ void Player::removeExperience(uint64_t exp, bool sendText /* = false*/)
 
 		std::string expString = std::to_string(lostExp) + (lostExp != 1 ? " experience points." : " experience point.");
 
-		TextMessage message(MESSAGE_EXPERIENCE, "You lost " + expString);
-		message.position = position;
-		message.primary.value = lostExp;
-		message.primary.color = TEXTCOLOR_RED;
+		TextMessage message(MESSAGE_EVENT_DEFAULT, "You lost " + expString);
 		sendTextMessage(message);
+
+		ColoredText coloredText(std::to_string(lostExp), position, TEXTCOLOR_RED);
+		sendColoredText(coloredText);
 
 		SpectatorVec spectators;
 		g_game.map.getSpectators(spectators, position, false, true);
 		spectators.erase(this);
 		if (!spectators.empty()) {
-			message.type = MESSAGE_EXPERIENCE_OTHERS;
+			message.type = MESSAGE_STATUS_SMALL;
 			message.text = getName() + " lost " + expString;
 			for (Creature* spectator : spectators) {
 				assert(dynamic_cast<Player*>(spectator) != nullptr);
 				static_cast<Player*>(spectator)->sendTextMessage(message);
+				static_cast<Player*>(spectator)->sendColoredText(coloredText);
 			}
 		}
 	}
@@ -4155,7 +4196,6 @@ bool Player::isPremium() const
 void Player::setPremiumTime(time_t premiumEndsAt)
 {
 	this->premiumEndsAt = premiumEndsAt;
-	sendBasicData();
 }
 
 PartyShields_t Player::getPartyShield(const Player* player) const

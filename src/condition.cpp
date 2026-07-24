@@ -887,69 +887,18 @@ bool ConditionRegeneration::executeCondition(Creature* creature, int32_t interva
 		return ConditionGeneric::executeCondition(creature, interval);
 	}
 
+	// The 7.6 client shows no regeneration numbers — no healed/mana-gain
+	// messages on the wire (matches the 7.72-era reference server).
 	if (internalHealthTicks >= healthTicks) {
 		internalHealthTicks = 0;
-
-		int32_t realHealthGain = creature->getHealth();
 		creature->changeHealth(healthGain);
-		realHealthGain = creature->getHealth() - realHealthGain;
-
-		if (isBuff && realHealthGain > 0) {
-			Player* player = creature->getPlayer();
-			if (player) {
-				std::string healString =
-				    std::to_string(realHealthGain) + (realHealthGain != 1 ? " hitpoints." : " hitpoint.");
-
-				TextMessage message(MESSAGE_HEALED, "You were healed for " + healString);
-				message.position = player->getPosition();
-				message.primary.value = realHealthGain;
-				message.primary.color = TEXTCOLOR_MAYABLUE;
-				player->sendTextMessage(message);
-
-				SpectatorVec spectators;
-				g_game.map.getSpectators(spectators, player->getPosition(), false, true);
-				spectators.erase(player);
-				if (!spectators.empty()) {
-					message.type = MESSAGE_HEALED_OTHERS;
-					message.text = player->getName() + " was healed for " + healString;
-					for (Creature* spectator : spectators) {
-						assert(dynamic_cast<Player*>(spectator) != nullptr);
-						static_cast<Player*>(spectator)->sendTextMessage(message);
-					}
-				}
-			}
-		}
 	}
 
 	if (internalManaTicks >= manaTicks) {
 		internalManaTicks = 0;
 
 		if (Player* player = creature->getPlayer()) {
-			int32_t realManaGain = player->getMana();
 			player->changeMana(manaGain);
-			realManaGain = player->getMana() - realManaGain;
-
-			if (isBuff && realManaGain > 0) {
-				std::string manaGainString = std::to_string(realManaGain);
-
-				TextMessage message(MESSAGE_HEALED, "You gained " + manaGainString + " mana.");
-				message.position = player->getPosition();
-				message.primary.value = realManaGain;
-				message.primary.color = TEXTCOLOR_MAYABLUE;
-				player->sendTextMessage(message);
-
-				SpectatorVec spectators;
-				g_game.map.getSpectators(spectators, player->getPosition(), false, true);
-				spectators.erase(player);
-				if (!spectators.empty()) {
-					message.type = MESSAGE_HEALED_OTHERS;
-					message.text = player->getName() + " gained " + manaGainString + " mana.";
-					for (Creature* spectator : spectators) {
-						assert(dynamic_cast<Player*>(spectator) != nullptr);
-						static_cast<Player*>(spectator)->sendTextMessage(message);
-					}
-				}
-			}
 		}
 	}
 
