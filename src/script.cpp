@@ -19,8 +19,9 @@ bool Scripts::loadScripts(std::string folderName, bool isLib, bool reload)
 
 	const auto dir = fs::current_path() / "data" / folderName;
 	if (!fs::exists(dir) || !fs::is_directory(dir)) {
-		std::cout << "[Warning - Scripts::loadScripts] Can not load folder '" << folderName << "'." << std::endl;
-		return false;
+		// Optional revscript folders (monster/lua, npc/lua) are absent in
+		// converted 7.x datapacks — nothing to load is not an error.
+		return true;
 	}
 
 	fs::recursive_directory_iterator endit;
