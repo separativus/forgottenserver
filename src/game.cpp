@@ -15,7 +15,6 @@
 #include "events.h"
 #include "globalevent.h"
 #include "housetile.h"
-#include "http/http.h"
 #include "inbox.h"
 #include "iologindata.h"
 #include "iomarket.h"
@@ -118,7 +117,6 @@ void Game::setGameState(GameState_t newState)
 			g_scheduler.stop();
 			g_databaseTasks.stop();
 			g_dispatcher.stop();
-			tfs::http::stop();
 			break;
 		}
 
