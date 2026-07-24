@@ -70,6 +70,7 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName)
 		}
 
 		uint32_t headerVersion = root_header.version;
+		Item::setMapVersion(headerVersion);
 		// Legacy 7.x-era maps: accept old OTBM header/items.otb versions the
 		// way the nekiro downgrade did (7.6 RME maps report version 0 and an
 		// old items.otb major/minor).

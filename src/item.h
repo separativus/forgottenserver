@@ -487,6 +487,8 @@ public:
 	static Container* CreateItemAsContainer(const uint16_t type, uint16_t size);
 	static Item* CreateItem(PropStream& propStream);
 	static Items items;
+	static void setMapVersion(uint32_t version) { mapVersion = version; }
+	static uint32_t mapVersion;
 
 	// Constructor for items
 	Item(const uint16_t type, uint16_t count = 0);

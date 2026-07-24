@@ -22,6 +22,7 @@ extern Spells* g_spells;
 extern Vocations g_vocations;
 
 Items Item::items;
+uint32_t Item::mapVersion = 1;
 
 Item* Item::CreateItem(const uint16_t type, uint16_t count /*= 0*/)
 {
@@ -118,7 +119,17 @@ Item* Item::CreateItem(PropStream& propStream)
 			break;
 	}
 
-	return Item::CreateItem(id, 0);
+	// OTBM header version 0 (7.x RME maps): stackables/splashes/fluids carry
+	// their count as a raw byte in the item node instead of ATTR_COUNT.
+	const ItemType& iType = items[id];
+	uint8_t count = 0;
+	if (mapVersion == 0 && (iType.stackable || iType.isSplash() || iType.isFluidContainer())) {
+		if (!propStream.read<uint8_t>(count)) {
+			return nullptr;
+		}
+	}
+
+	return Item::CreateItem(id, count);
 }
 
 Item::Item(const uint16_t type, uint16_t count /*= 0*/) : id(type)
