@@ -292,6 +292,11 @@ public:
 	bool internalCreatureSay(Creature* creature, SpeakClasses type, const std::string& text, bool ghostMode,
 	                         SpectatorVec* spectatorsPtr = nullptr, const Position* pos = nullptr, bool echo = false);
 
+	void loadMotdNum();
+	void saveMotdNum() const;
+	uint32_t getMotdNum() const { return motdNum; }
+	void incrementMotdNum() { motdNum++; }
+
 	void loadPlayersRecord();
 	void checkPlayersRecord();
 
@@ -541,6 +546,9 @@ private:
 
 	void updatePlayersRecord() const;
 	uint32_t playersRecord = 0;
+
+	std::string motdHash;
+	uint32_t motdNum = 0;
 };
 
 #endif // FS_GAME_H

@@ -93,6 +93,7 @@ void Game::setGameState(GameState_t newState)
 
 			mounts.loadFromXml();
 
+			loadMotdNum();
 			loadPlayersRecord();
 
 			g_globalEvents->startup();
@@ -110,6 +111,7 @@ void Game::setGameState(GameState_t newState)
 				it = players.begin();
 			}
 
+			saveMotdNum();
 			saveGameState();
 
 			g_dispatcher.addTask([this]() { shutdown(); });
@@ -4903,6 +4905,50 @@ void Game::updatePlayersRecord() const
 	Database& db = Database::getInstance();
 	db.executeQuery(
 	    fmt::format("UPDATE `server_config` SET `value` = '{:d}' WHERE `config` = 'players_record'", playersRecord));
+}
+
+namespace {
+
+std::string hexDigest(std::string_view digest)
+{
+	std::string hex;
+	hex.reserve(digest.size() * 2);
+	for (uint8_t byte : digest) {
+		hex += fmt::format("{:02x}", byte);
+	}
+	return hex;
+}
+
+} // namespace
+
+void Game::loadMotdNum()
+{
+	Database& db = Database::getInstance();
+
+	DBResult_ptr result = db.storeQuery("SELECT `value` FROM `server_config` WHERE `config` = 'motd_num'");
+	if (result) {
+		motdNum = result->getNumber<uint32_t>("value");
+	} else {
+		db.executeQuery("INSERT INTO `server_config` (`config`, `value`) VALUES ('motd_num', '0')");
+	}
+
+	result = db.storeQuery("SELECT `value` FROM `server_config` WHERE `config` = 'motd_hash'");
+	if (result) {
+		motdHash = result->getString("value");
+		if (motdHash != hexDigest(transformToSHA1(getString(ConfigManager::MOTD)))) {
+			++motdNum;
+		}
+	} else {
+		db.executeQuery("INSERT INTO `server_config` (`config`, `value`) VALUES ('motd_hash', '')");
+	}
+}
+
+void Game::saveMotdNum() const
+{
+	Database& db = Database::getInstance();
+	db.executeQuery(fmt::format("UPDATE `server_config` SET `value` = '{:d}' WHERE `config` = 'motd_num'", motdNum));
+	db.executeQuery(fmt::format("UPDATE `server_config` SET `value` = '{:s}' WHERE `config` = 'motd_hash'",
+	                            hexDigest(transformToSHA1(getString(ConfigManager::MOTD)))));
 }
 
 void Game::loadPlayersRecord()
