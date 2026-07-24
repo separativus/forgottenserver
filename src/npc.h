@@ -82,7 +82,7 @@ public:
 	friend class NpcScriptInterface;
 
 private:
-	Npc* npc;
+	Npc* npc = nullptr;
 	bool loaded = false;
 };
 

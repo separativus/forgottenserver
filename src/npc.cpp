@@ -68,11 +68,10 @@ std::map<const std::string, NpcType*> getNpcTypes() { return npcTypes; }
 
 NpcType* getNpcType(std::string name)
 {
-	auto npcType = npcTypes[name];
-	if (npcType) {
-		return npcType;
-	}
-	return nullptr;
+	// find() instead of operator[]: the lookup must not plant a permanent
+	// null entry for unknown names (Npcs::load would crash iterating it).
+	auto it = npcTypes.find(name);
+	return it != npcTypes.end() ? it->second : nullptr;
 }
 
 NpcScriptInterface* getScriptInterface() { return scriptInterface.get(); }
@@ -1205,11 +1204,17 @@ NpcEventsHandler::NpcEventsHandler() : scriptInterface(Npcs::scriptInterface) {}
 
 NpcEventsHandler::~NpcEventsHandler()
 {
+	// npc is null for a NpcType's default handler (never attached to a
+	// creature) — it owns no registered events; deref'ing npc here crashed
+	// the server whenever a NpcType was destroyed (e.g. /s with an unknown
+	// npc name). Lua-defined types share their event ids across copies, so
+	// only file-based handlers remove them.
+	if (!npc || npc->npcType->fromLua) {
+		return;
+	}
 	for (auto eventId : {creatureSayEvent, creatureDisappearEvent, creatureAppearEvent, creatureMoveEvent,
 	                     playerCloseChannelEvent, playerEndTradeEvent, thinkEvent}) {
-		if (!npc->npcType->fromLua) {
-			scriptInterface->removeEvent(eventId);
-		}
+		scriptInterface->removeEvent(eventId);
 	}
 }
 
