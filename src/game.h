@@ -513,6 +513,7 @@ private:
 	void playerWhisper(Player* player, const std::string& text);
 	bool playerYell(Player* player, const std::string& text);
 	bool playerSpeakTo(Player* player, SpeakClasses type, const std::string& receiver, const std::string& text);
+	void deliverPrivateMessage(uint32_t senderId, uint32_t receiverId, SpeakClasses type, const std::string& text);
 	void playerSpeakToNpc(Player* player, const std::string& text);
 
 	void checkDecay();

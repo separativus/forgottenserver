@@ -2138,6 +2138,20 @@ void ProtocolGame::sendLogMessage(const std::string& text)
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendPrivateMessageFrom(const Creature* speaker, const std::string& text)
+{
+	// TibiaFun NPC conversations: make sure the client has a private chat window
+	// for this npc (0xAD opens and focuses it), then deliver the line into it.
+	sendOpenPrivateChannel(speaker->getName());
+
+	NetworkMessage msg;
+	msg.addByte(0xAA);
+	msg.addString(speaker->getName());
+	msg.addByte(TALKTYPE_PRIVATE);
+	msg.addString(text);
+	writeToOutputBuffer(msg);
+}
+
 void ProtocolGame::sendPrivateMessage(const Player* speaker, SpeakClasses type, const std::string& text)
 {
 	NetworkMessage msg;

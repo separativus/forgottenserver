@@ -3700,6 +3700,17 @@ bool Game::playerSpeakTo(Player* player, SpeakClasses type, const std::string& r
 {
 	Player* toPlayer = getPlayerByName(receiver);
 	if (!toPlayer) {
+		// TibiaFun: private messages addressed to a nearby npc continue the
+		// conversation in its private chat window.
+		SpectatorVec spectators;
+		map.getSpectators(spectators, player->getPosition());
+		for (Creature* spectator : spectators) {
+			if (spectator->getNpc() && caseInsensitiveEqual(spectator->getName(), receiver)) {
+				spectator->onCreatureSay(player, TALKTYPE_PRIVATE, text);
+				return true;
+			}
+		}
+
 		player->sendTextMessage(MESSAGE_STATUS_SMALL, "A player with this name is not online.");
 		return false;
 	}
@@ -3732,8 +3743,15 @@ bool Game::playerSpeakTo(Player* player, SpeakClasses type, const std::string& r
 		}
 	}
 
-	toPlayer->sendPrivateMessage(player, type, text);
+	// TibiaFun: open the receiver's private chat window first and deliver the
+	// text shortly after — a message arriving in the same frame the window is
+	// created in lands in the Default console instead of the window.
+	toPlayer->sendOpenPrivateChannel(player->getName());
 	toPlayer->onCreatureSay(player, type, text);
+	g_scheduler.addEvent(createSchedulerTask(
+	    150, [this, senderId = player->getID(), receiverId = toPlayer->getID(), type, text = std::string{text}]() {
+		    deliverPrivateMessage(senderId, receiverId, type, text);
+	    }));
 
 	if (toPlayer->isInGhostMode() && !player->canSeeGhostMode(toPlayer)) {
 		player->sendTextMessage(MESSAGE_STATUS_SMALL, "A player with this name is not online.");
@@ -3741,6 +3759,16 @@ bool Game::playerSpeakTo(Player* player, SpeakClasses type, const std::string& r
 		player->sendTextMessage(MESSAGE_STATUS_SMALL, fmt::format("Message sent to {:s}.", toPlayer->getName()));
 	}
 	return true;
+}
+
+void Game::deliverPrivateMessage(uint32_t senderId, uint32_t receiverId, SpeakClasses type, const std::string& text)
+{
+	Player* sender = getPlayerByID(senderId);
+	Player* receiver = getPlayerByID(receiverId);
+	if (!sender || !receiver) {
+		return;
+	}
+	receiver->sendPrivateMessage(sender, type, text);
 }
 
 void Game::playerSpeakToNpc(Player* player, const std::string& text)

@@ -892,6 +892,12 @@ public:
 		}
 	}
 	void sendCombatMessage(const TextMessage& message) const;
+	void sendPrivateMessageFrom(const Creature* speaker, const std::string& text) const
+	{
+		if (client) {
+			client->sendPrivateMessageFrom(speaker, text);
+		}
+	}
 	void sendReLoginWindow(uint8_t unfairFightReduction) const
 	{
 		if (client) {

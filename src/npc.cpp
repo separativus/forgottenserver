@@ -440,7 +440,7 @@ void Npc::doSay(const std::string& text) { g_game.internalCreatureSay(this, TALK
 void Npc::doSayToPlayer(Player* player, const std::string& text)
 {
 	if (player) {
-		player->sendCreatureSay(this, TALKTYPE_PRIVATE, text);
+		player->sendPrivateMessageFrom(this, text);
 		player->onCreatureSay(this, TALKTYPE_PRIVATE, text);
 	}
 }
@@ -678,6 +678,8 @@ void NpcScriptInterface::registerFunctions()
 	// metatable
 	tfs::lua::registerMethod(L, "Npc", "getParameter", NpcScriptInterface::luaNpcGetParameter);
 	tfs::lua::registerMethod(L, "Npc", "setFocus", NpcScriptInterface::luaNpcSetFocus);
+	tfs::lua::registerMethod(L, "Npc", "sayTo", NpcScriptInterface::luaNpcSayTo);
+	tfs::lua::registerMethod(L, "Npc", "openPrivateChannel", NpcScriptInterface::luaNpcOpenPrivateChannel);
 
 	tfs::lua::registerMethod(L, "Npc", "openShopWindow", NpcScriptInterface::luaNpcOpenShopWindow);
 	tfs::lua::registerMethod(L, "Npc", "closeShopWindow", NpcScriptInterface::luaNpcCloseShopWindow);
@@ -691,10 +693,13 @@ int NpcScriptInterface::luaActionSay(lua_State* L)
 		return 0;
 	}
 
+	// selfSay(words[, target[, publicize]])
+	// TibiaFun: a targeted, non-publicized reply continues the conversation in
+	// the player's private chat window with this npc.
 	const std::string& text = tfs::lua::getString(L, 1);
 	if (lua_gettop(L) >= 2) {
 		Player* target = tfs::lua::getPlayer(L, 2);
-		if (target) {
+		if (target && !tfs::lua::getBoolean(L, 3, false)) {
 			npc->doSayToPlayer(target, text);
 			return 0;
 		}
@@ -1048,6 +1053,30 @@ int NpcScriptInterface::luaNpcSetFocus(lua_State* L)
 		lua_pushnil(L);
 	}
 	return 1;
+}
+
+int NpcScriptInterface::luaNpcOpenPrivateChannel(lua_State* L)
+{
+	// npc:openPrivateChannel(player) — make the client open/focus this npc's
+	// private chat window ahead of a delayed reply (window first, message second).
+	Npc* npc = tfs::lua::getUserdata<Npc>(L, 1);
+	Player* target = tfs::lua::getPlayer(L, 2);
+	if (npc && target) {
+		target->sendOpenPrivateChannel(npc->getName());
+	}
+	return 0;
+}
+
+int NpcScriptInterface::luaNpcSayTo(lua_State* L)
+{
+	// npc:sayTo(player, text) — deliver into the player's private chat window
+	Npc* npc = tfs::lua::getUserdata<Npc>(L, 1);
+	Player* target = tfs::lua::getPlayer(L, 2);
+	const std::string& text = tfs::lua::getString(L, 3);
+	if (npc && target) {
+		npc->doSayToPlayer(target, text);
+	}
+	return 0;
 }
 
 int NpcScriptInterface::luaNpcOpenShopWindow(lua_State* L)
