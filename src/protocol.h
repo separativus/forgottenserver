@@ -5,7 +5,6 @@
 #define FS_PROTOCOL_H
 
 #include "connection.h"
-#include "xtea.h"
 
 class Protocol : public std::enable_shared_from_this<Protocol>
 {
@@ -43,19 +42,12 @@ public:
 	}
 
 protected:
-	static constexpr size_t RSA_BUFFER_LENGTH = 128;
-
 	void disconnect() const
 	{
 		if (auto connection = getConnection()) {
 			connection->close();
 		}
 	}
-	void enableXTEAEncryption() { encryptionEnabled = true; }
-	void setXTEAKey(const xtea::key& key) { this->key = xtea::expand_key(key); }
-	void setChecksumMode(checksumMode_t newMode) { checksumMode = newMode; }
-
-	static bool RSA_decrypt(NetworkMessage& msg);
 
 	void setRawMessages(bool value) { rawMessages = value; }
 
@@ -67,10 +59,6 @@ private:
 	OutputMessage_ptr outputBuffer;
 
 	const ConnectionWeak_ptr connection;
-	xtea::round_keys key;
-	uint32_t sequenceNumber = 0;
-	bool encryptionEnabled = false;
-	checksumMode_t checksumMode = CHECKSUM_ADLER;
 	bool rawMessages = false;
 };
 

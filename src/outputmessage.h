@@ -21,17 +21,6 @@ public:
 
 	void writeMessageLength() { add_header(info.length); }
 
-	void addCryptoHeader(checksumMode_t mode, uint32_t& sequence)
-	{
-		if (mode == CHECKSUM_ADLER) {
-			add_header(adlerChecksum(&buffer[outputBufferStart], info.length));
-		} else if (mode == CHECKSUM_SEQUENCE) {
-			add_header(sequence++);
-		}
-
-		writeMessageLength();
-	}
-
 	void append(const NetworkMessage& msg)
 	{
 		auto msgLen = msg.getLength();

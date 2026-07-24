@@ -6,63 +6,17 @@
 #include "protocol.h"
 
 #include "outputmessage.h"
-#include "rsa.h"
-#include "xtea.h"
-
-namespace {
-
-void XTEA_encrypt(OutputMessage& msg, const xtea::round_keys& key)
-{
-	// The message must be a multiple of 8
-	size_t paddingBytes = msg.getLength() % 8u;
-	if (paddingBytes != 0) {
-		msg.addPaddingBytes(8 - paddingBytes);
-	}
-
-	uint8_t* buffer = msg.getOutputBuffer();
-	xtea::encrypt(buffer, msg.getLength(), key);
-}
-
-bool XTEA_decrypt(NetworkMessage& msg, const xtea::round_keys& key)
-{
-	if (((msg.getLength() - 6) & 7) != 0) {
-		return false;
-	}
-
-	uint8_t* buffer = msg.getRemainingBuffer();
-	xtea::decrypt(buffer, msg.getLength() - 6, key);
-
-	uint16_t innerLength = msg.get<uint16_t>();
-	if (innerLength + 8 > msg.getLength()) {
-		return false;
-	}
-
-	msg.setLength(innerLength);
-	return true;
-}
-
-} // namespace
 
 void Protocol::onSendMessage(const OutputMessage_ptr& msg)
 {
+	// Protocol 7.60 predates RSA/XTEA/checksums: the whole session is
+	// plaintext, framed only by the u16 length header.
 	if (!rawMessages) {
 		msg->writeMessageLength();
-
-		if (encryptionEnabled) {
-			XTEA_encrypt(*msg, key);
-			msg->addCryptoHeader(checksumMode, sequenceNumber);
-		}
 	}
 }
 
-void Protocol::onRecvMessage(NetworkMessage& msg)
-{
-	if (encryptionEnabled && !XTEA_decrypt(msg, key)) {
-		return;
-	}
-
-	parsePacket(msg);
-}
+void Protocol::onRecvMessage(NetworkMessage& msg) { parsePacket(msg); }
 
 OutputMessage_ptr Protocol::getOutputBuffer(int32_t size)
 {
@@ -74,16 +28,6 @@ OutputMessage_ptr Protocol::getOutputBuffer(int32_t size)
 		outputBuffer = OutputMessagePool::getOutputMessage();
 	}
 	return outputBuffer;
-}
-
-bool Protocol::RSA_decrypt(NetworkMessage& msg)
-{
-	if (msg.getRemainingBufferLength() < RSA_BUFFER_LENGTH) {
-		return false;
-	}
-
-	tfs::rsa::decrypt(msg.getRemainingBuffer(), RSA_BUFFER_LENGTH);
-	return msg.getByte() == 0;
 }
 
 Connection::Address Protocol::getIP() const

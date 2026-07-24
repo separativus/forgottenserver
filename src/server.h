@@ -13,7 +13,6 @@ public:
 	virtual ~ServiceBase() = default;
 
 	virtual bool is_single_socket() const = 0;
-	virtual bool is_checksummed() const = 0;
 	virtual uint8_t get_protocol_identifier() const = 0;
 	virtual const char* get_protocol_name() const = 0;
 
@@ -25,7 +24,6 @@ class Service final : public ServiceBase
 {
 public:
 	bool is_single_socket() const override { return ProtocolType::server_sends_first; }
-	bool is_checksummed() const override { return ProtocolType::use_checksum; }
 	uint8_t get_protocol_identifier() const override { return ProtocolType::protocol_identifier; }
 	const char* get_protocol_name() const override { return ProtocolType::protocol_name(); }
 

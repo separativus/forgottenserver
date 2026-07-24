@@ -13,9 +13,7 @@
 #include "monsters.h"
 #include "outfit.h"
 #include "protocollogin.h"
-#include "protocolold.h"
 #include "protocolstatus.h"
-#include "rsa.h"
 #include "scheduler.h"
 #include "script.h"
 #include "scriptmanager.h"
@@ -99,16 +97,6 @@ void mainLoader(ServiceManager* services)
 	}
 #endif
 
-	// set RSA key
-	std::cout << ">> Loading RSA key " << std::endl;
-	try {
-		std::ifstream key{"key.pem"};
-		std::string pem{std::istreambuf_iterator<char>{key}, std::istreambuf_iterator<char>{}};
-		tfs::rsa::loadPEM(pem);
-	} catch (const std::exception& e) {
-		startupErrorMessage(e.what());
-		return;
-	}
 
 	std::cout << ">> Establishing database connection..." << std::flush;
 
@@ -225,9 +213,6 @@ void mainLoader(ServiceManager* services)
 
 	// OT protocols
 	services->add<ProtocolStatus>(static_cast<uint16_t>(getNumber(ConfigManager::STATUS_PORT)));
-
-	// Legacy login protocol
-	services->add<ProtocolOld>(static_cast<uint16_t>(getNumber(ConfigManager::LOGIN_PORT)));
 
 	RentPeriod_t rentPeriod;
 	std::string strRentPeriod = boost::algorithm::to_lower_copy(getString(ConfigManager::HOUSE_RENT_PERIOD));
