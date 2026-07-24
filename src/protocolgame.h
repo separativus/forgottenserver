@@ -36,6 +36,18 @@ struct TextMessage
 	TextMessage(MessageClasses type, std::string text) : type(type), text(std::move(text)) {}
 };
 
+struct ColoredText
+{
+	std::string text;
+	Position position;
+	TextColor_t color;
+
+	ColoredText() = default;
+	ColoredText(std::string text, Position position, TextColor_t color) :
+	    text(std::move(text)), position(position), color(color)
+	{}
+};
+
 class ProtocolGame final : public Protocol
 {
 public:
@@ -82,7 +94,6 @@ private:
 	// Parse methods
 	void parseAutoWalk(NetworkMessage& msg);
 	void parseSetOutfit(NetworkMessage& msg);
-	void parseEditPodiumRequest(NetworkMessage& msg);
 	void parseSay(NetworkMessage& msg);
 	void parseLookAt(NetworkMessage& msg);
 	void parseLookInBattleList(NetworkMessage& msg);
@@ -156,11 +167,14 @@ private:
 	                 const InvitedMap* invitedUsers);
 	void sendOpenPrivateChannel(const std::string& receiver);
 	void sendToChannel(const Creature* creature, SpeakClasses type, const std::string& text, uint16_t channelId);
+	void sendLogMessage(const std::string& text);
 	void sendPrivateMessage(const Player* speaker, SpeakClasses type, const std::string& text);
 	void sendIcons(uint32_t icons);
 	void sendFYIBox(const std::string& message);
 
 	void sendDistanceShoot(const Position& from, const Position& to, uint8_t type);
+	void sendColoredText(const ColoredText& coloredText);
+	void sendWorldLight(LightInfo lightInfo);
 	void sendMagicEffect(const Position& pos, uint8_t type);
 	void sendCreatureHealth(const Creature* creature);
 	void sendSkills();
@@ -177,7 +191,6 @@ private:
 	void sendStats();
 	void sendExperienceTracker(int64_t rawExp, int64_t finalExp);
 	void sendClientFeatures();
-	void sendBasicData();
 	void sendTextMessage(const TextMessage& message);
 	void sendReLoginWindow(uint8_t unfairFightReduction);
 
@@ -219,10 +232,7 @@ private:
 
 	void sendItemClasses();
 
-	void sendPendingStateEntered();
-	void sendEnterWorld();
 
-	void sendFightModes();
 
 	void sendCreatureLight(const Creature* creature);
 
@@ -281,7 +291,6 @@ private:
 	void GetMapDescription(int32_t x, int32_t y, int32_t z, int32_t width, int32_t height, NetworkMessage& msg);
 
 	void AddCreature(NetworkMessage& msg, const Creature* creature, bool known, uint32_t remove);
-	void AddCreatureIcons(NetworkMessage& msg, const Creature* creature);
 	void AddPlayerStats(NetworkMessage& msg);
 	void AddOutfit(NetworkMessage& msg, const Outfit_t& outfit);
 	void AddPlayerSkills(NetworkMessage& msg);

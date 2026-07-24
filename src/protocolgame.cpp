@@ -106,34 +106,6 @@ std::size_t clientLogin(const Player& player)
 	return waitList.size();
 }
 
-ClientDamageType getClientDamageType(CombatType_t combatType)
-{
-	switch (combatType) {
-		case COMBAT_PHYSICALDAMAGE:
-			return CLIENT_DAMAGETYPE_PHYSICAL;
-		case COMBAT_ENERGYDAMAGE:
-			return CLIENT_DAMAGETYPE_ENERGY;
-		case COMBAT_EARTHDAMAGE:
-			return CLIENT_DAMAGETYPE_EARTH;
-		case COMBAT_FIREDAMAGE:
-			return CLIENT_DAMAGETYPE_FIRE;
-		case COMBAT_LIFEDRAIN:
-			return CLIENT_DAMAGETYPE_LIFEDRAIN;
-		case COMBAT_HEALING:
-			return CLIENT_DAMAGETYPE_HEALING;
-		case COMBAT_DROWNDAMAGE:
-			return CLIENT_DAMAGETYPE_DROWN;
-		case COMBAT_ICEDAMAGE:
-			return CLIENT_DAMAGETYPE_ICE;
-		case COMBAT_HOLYDAMAGE:
-			return CLIENT_DAMAGETYPE_HOLY;
-		case COMBAT_DEATHDAMAGE:
-			return CLIENT_DAMAGETYPE_DEATH;
-		default:
-			return CLIENT_DAMAGETYPE_UNDEFINED;
-	}
-}
-
 } // namespace
 
 void ProtocolGame::release()
@@ -286,6 +258,11 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
 	player->resetIdleTime();
 	acceptPackets = true;
+
+	// TibiaFun: reconnecting skips the onLogin creaturescript and the channel
+	// removal above dropped the membership, so reopen the combat log window to
+	// keep it the default.
+	g_game.playerOpenChannel(player->getID(), CHANNEL_LOG);
 }
 
 void ProtocolGame::logout(bool displayEffect, bool forced)
@@ -544,9 +521,6 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 		case 0x85:
 			parseRotateItem(msg);
 			break;
-		case 0x86:
-			parseEditPodiumRequest(msg);
-			break;
 		case 0x87:
 			parseCloseContainer(msg);
 			break;
@@ -638,9 +612,6 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 		case 0xCA:
 			parseUpdateContainer(msg);
 			break;
-		case 0xCB:
-			parseBrowseField(msg);
-			break;
 		case 0xCC:
 			parseSeekInContainer(msg);
 			break;
@@ -681,34 +652,9 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			break;
 		case 0xF3: /* get object info */
 			break;
-		case 0xF4:
-			parseMarketLeave();
-			break;
-		case 0xF5:
-			parseMarketBrowse(msg);
-			break;
-		case 0xF6:
-			parseMarketCreateOffer(msg);
-			break;
-		case 0xF7:
-			parseMarketCancelOffer(msg);
-			break;
-		case 0xF8:
-			parseMarketAcceptOffer(msg);
-			break;
-		case 0xF9:
-			parseModalWindowAnswer(msg);
-			break;
-			// case 0xFA: break; // store window open
-			// case 0xFB: break; // store window click
-			// case 0xFC: break; // store window buy
-			// case 0xFD: break; // store window history 1
-			// case 0xFE: break; // store window history 2
 
 		default:
-			g_dispatcher.addTask([=, playerID = player->getID(), msg = new NetworkMessage(msg)]() {
-				g_game.parsePlayerNetworkMessage(playerID, recvbyte, msg);
-			});
+			// The 7.6 client has no further opcodes; ignore unknown bytes.
 			break;
 	}
 
@@ -933,7 +879,9 @@ void ProtocolGame::parseOpenPrivateChannel(NetworkMessage& msg)
 void ProtocolGame::parseAutoWalk(NetworkMessage& msg)
 {
 	uint8_t numdirs = msg.getByte();
-	if (numdirs == 0 || (msg.getBufferPosition() + numdirs) != (msg.getLength() + 8)) {
+	// Plaintext framing: the message length covers the 2-byte header and the
+	// buffer position starts past it, so both sides already line up.
+	if (numdirs == 0 || (msg.getBufferPosition() + numdirs) != msg.getLength()) {
 		return;
 	}
 
@@ -984,78 +932,17 @@ void ProtocolGame::parseAutoWalk(NetworkMessage& msg)
 
 void ProtocolGame::parseSetOutfit(NetworkMessage& msg)
 {
-	uint8_t outfitType = msg.getByte();
-
+	// The 7.6 client sends the lookType as a single byte and knows neither
+	// addons nor mounts.
 	Outfit_t newOutfit;
-	newOutfit.lookType = msg.get<uint16_t>();
+	newOutfit.lookType = msg.getByte();
 	newOutfit.lookHead = msg.getByte();
 	newOutfit.lookBody = msg.getByte();
 	newOutfit.lookLegs = msg.getByte();
 	newOutfit.lookFeet = msg.getByte();
-	newOutfit.lookAddons = msg.getByte();
 
-	// Set outfit window
-	if (outfitType == 0) {
-		newOutfit.lookMount = msg.get<uint16_t>();
-		if (newOutfit.lookMount != 0) {
-			newOutfit.lookMountHead = msg.getByte();
-			newOutfit.lookMountBody = msg.getByte();
-			newOutfit.lookMountLegs = msg.getByte();
-			newOutfit.lookMountFeet = msg.getByte();
-		} else {
-			msg.skipBytes(4);
-
-			// prevent mount color settings from resetting
-			const Outfit_t& currentOutfit = player->getCurrentOutfit();
-			newOutfit.lookMountHead = currentOutfit.lookMountHead;
-			newOutfit.lookMountBody = currentOutfit.lookMountBody;
-			newOutfit.lookMountLegs = currentOutfit.lookMountLegs;
-			newOutfit.lookMountFeet = currentOutfit.lookMountFeet;
-		}
-
-		msg.get<uint16_t>(); // familiar looktype
-		bool randomizeMount = msg.getByte() == 0x01;
-		g_dispatcher.addTask(
-		    [=, playerID = player->getID()]() { g_game.playerChangeOutfit(playerID, newOutfit, randomizeMount); });
-
-		// Store "try outfit" window
-	} else if (outfitType == 1) {
-		newOutfit.lookMount = 0;
-		// mount colors or store offerId (needs testing)
-		newOutfit.lookMountHead = msg.getByte();
-		newOutfit.lookMountBody = msg.getByte();
-		newOutfit.lookMountLegs = msg.getByte();
-		newOutfit.lookMountFeet = msg.getByte();
-		// player->? (open store?)
-
-		// Podium interaction
-	} else if (outfitType == 2) {
-		Position pos = msg.getPosition();
-		uint16_t spriteId = msg.get<uint16_t>();
-		uint8_t stackpos = msg.getByte();
-		newOutfit.lookMount = msg.get<uint16_t>();
-		newOutfit.lookMountHead = msg.getByte();
-		newOutfit.lookMountBody = msg.getByte();
-		newOutfit.lookMountLegs = msg.getByte();
-		newOutfit.lookMountFeet = msg.getByte();
-		Direction direction = static_cast<Direction>(msg.getByte());
-		bool podiumVisible = msg.getByte() == 1;
-
-		// apply to podium
-		g_dispatcher.addTask(DISPATCHER_TASK_EXPIRATION, [=, playerID = player->getID()]() {
-			g_game.playerEditPodium(playerID, newOutfit, pos, stackpos, spriteId, podiumVisible, direction);
-		});
-	}
-}
-
-void ProtocolGame::parseEditPodiumRequest(NetworkMessage& msg)
-{
-	Position pos = msg.getPosition();
-	uint16_t spriteId = msg.get<uint16_t>();
-	uint8_t stackpos = msg.getByte();
-	g_dispatcher.addTask(DISPATCHER_TASK_EXPIRATION, [=, playerID = player->getID()]() {
-		g_game.playerRequestEditPodium(playerID, pos, stackpos, spriteId);
-	});
+	g_dispatcher.addTask(
+	    [=, playerID = player->getID()]() { g_game.playerChangeOutfit(playerID, newOutfit, false); });
 }
 
 void ProtocolGame::parseUseItem(NetworkMessage& msg)
@@ -1149,14 +1036,16 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 
 	SpeakClasses type = static_cast<SpeakClasses>(msg.getByte());
 	switch (type) {
-		case TALKTYPE_PRIVATE_TO:
-		case TALKTYPE_PRIVATE_RED_TO:
+		case TALKTYPE_PRIVATE:
+		case TALKTYPE_PRIVATE_RED:
 			receiver = msg.getString();
 			channelId = 0;
 			break;
 
 		case TALKTYPE_CHANNEL_Y:
+		case TALKTYPE_CHANNEL_O:
 		case TALKTYPE_CHANNEL_R1:
+		case TALKTYPE_CHANNEL_R2:
 			channelId = msg.get<uint16_t>();
 			break;
 
@@ -1506,14 +1395,9 @@ void ProtocolGame::sendOpenPrivateChannel(const std::string& receiver)
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendChannelEvent(uint16_t channelId, const std::string& playerName, ChannelEvent_t channelEvent)
+void ProtocolGame::sendChannelEvent(uint16_t, const std::string&, ChannelEvent_t)
 {
-	NetworkMessage msg;
-	msg.addByte(0xF3);
-	msg.add<uint16_t>(channelId);
-	msg.addString(playerName);
-	msg.addByte(channelEvent);
-	writeToOutputBuffer(msg);
+	// 0xF3 channel events are unknown to the 7.6 client.
 }
 
 void ProtocolGame::sendCreatureOutfit(const Creature* creature, const Outfit_t& outfit)
@@ -1540,17 +1424,9 @@ void ProtocolGame::sendCreatureLight(const Creature* creature)
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendCreatureWalkthrough(const Creature* creature, bool walkthrough)
+void ProtocolGame::sendCreatureWalkthrough(const Creature*, bool)
 {
-	if (!canSee(creature)) {
-		return;
-	}
-
-	NetworkMessage msg;
-	msg.addByte(0x92);
-	msg.add<uint32_t>(creature->getID());
-	msg.addByte(walkthrough ? 0x00 : 0x01);
-	writeToOutputBuffer(msg);
+	// 0x92 walkthrough updates are unknown to the 7.6 client.
 }
 
 void ProtocolGame::sendCreatureShield(const Creature* creature)
@@ -1590,9 +1466,8 @@ void ProtocolGame::sendCreatureSquare(const Creature* creature, SquareColor_t co
 	}
 
 	NetworkMessage msg;
-	msg.addByte(0x93);
+	msg.addByte(0x86);
 	msg.add<uint32_t>(creature->getID());
-	msg.addByte(0x01);
 	msg.addByte(color);
 	writeToOutputBuffer(msg);
 }
@@ -1609,7 +1484,6 @@ void ProtocolGame::sendAddMarker(const Position& pos, uint8_t markType, const st
 {
 	NetworkMessage msg;
 	msg.addByte(0xDD);
-	msg.addByte(0x00); // unknown
 	msg.addPosition(pos);
 	msg.addByte(markType);
 	msg.addString(desc);
@@ -1622,7 +1496,6 @@ void ProtocolGame::sendReLoginWindow(uint8_t unfairFightReduction)
 	msg.addByte(0x28);
 	msg.addByte(0x00);
 	msg.addByte(unfairFightReduction);
-	msg.addByte(0x00); // can use death redemption (bool)
 	writeToOutputBuffer(msg);
 }
 
@@ -1633,101 +1506,17 @@ void ProtocolGame::sendStats()
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendExperienceTracker(int64_t rawExp, int64_t finalExp)
+void ProtocolGame::sendExperienceTracker(int64_t, int64_t)
 {
-	NetworkMessage msg;
-	msg.addByte(0xAF);
-	msg.add<int64_t>(rawExp);
-	msg.add<int64_t>(finalExp);
-	writeToOutputBuffer(msg);
-}
-
-void ProtocolGame::sendClientFeatures()
-{
-	NetworkMessage msg;
-	msg.addByte(0x17);
-
-	msg.add<uint32_t>(player->getID());
-	msg.add<uint16_t>(50); // beat duration
-
-	msg.addDouble(Creature::speedA, 3);
-	msg.addDouble(Creature::speedB, 3);
-	msg.addDouble(Creature::speedC, 3);
-
-	// can report bugs?
-	msg.addByte(player->getAccountType() >= ACCOUNT_TYPE_TUTOR ? 0x01 : 0x00);
-
-	msg.addByte(0x00); // can change pvp framing option
-	msg.addByte(0x00); // expert mode button enabled
-
-	msg.add<uint16_t>(0x00); // store images url (string or u16 0x00)
-	msg.add<uint16_t>(25);   // premium coin package size
-
-	msg.addByte(0x00); // exiva button enabled (bool)
-	msg.addByte(0x00); // Tournament button (bool)
-
-	writeToOutputBuffer(msg);
-}
-
-void ProtocolGame::sendBasicData()
-{
-	NetworkMessage msg;
-	msg.addByte(0x9F);
-	if (player->isPremium()) {
-		msg.addByte(1);
-		msg.add<uint32_t>(getBoolean(ConfigManager::FREE_PREMIUM) ? 0 : player->premiumEndsAt);
-	} else {
-		msg.addByte(0);
-		msg.add<uint32_t>(0);
-	}
-
-	msg.addByte(player->getVocation()->getClientId());
-	msg.addByte(0x00); // is prey system enabled (bool)
-
-	// unlock spells on action bar
-	msg.add<uint16_t>(0xFF);
-	for (uint8_t spellId = 0x00; spellId < 0xFF; spellId++) {
-		msg.add<uint16_t>(spellId);
-	}
-
-	msg.addByte(player->getVocation()->getMagicShield()); // is magic shield active (bool)
-	writeToOutputBuffer(msg);
+	// 0xAF experience tracker is unknown to the 7.6 client.
 }
 
 void ProtocolGame::sendTextMessage(const TextMessage& message)
 {
+	// 7.x text message: type byte + text, nothing else.
 	NetworkMessage msg;
 	msg.addByte(0xB4);
 	msg.addByte(message.type);
-	switch (message.type) {
-		case MESSAGE_DAMAGE_DEALT:
-		case MESSAGE_DAMAGE_RECEIVED:
-		case MESSAGE_DAMAGE_OTHERS: {
-			msg.addPosition(message.position);
-			msg.add<uint32_t>(message.primary.value);
-			msg.addByte(message.primary.color);
-			msg.add<uint32_t>(message.secondary.value);
-			msg.addByte(message.secondary.color);
-			break;
-		}
-		case MESSAGE_HEALED:
-		case MESSAGE_HEALED_OTHERS:
-		case MESSAGE_EXPERIENCE:
-		case MESSAGE_EXPERIENCE_OTHERS: {
-			msg.addPosition(message.position);
-			msg.add<uint32_t>(message.primary.value);
-			msg.addByte(message.primary.color);
-			break;
-		}
-		case MESSAGE_GUILD:
-		case MESSAGE_PARTY_MANAGEMENT:
-		case MESSAGE_PARTY:
-			msg.add<uint16_t>(message.channelId);
-			break;
-		default: {
-			break;
-		}
-	}
 	msg.addString(message.text);
 	writeToOutputBuffer(msg);
 }
@@ -1746,9 +1535,6 @@ void ProtocolGame::sendCreatePrivateChannel(uint16_t channelId, const std::strin
 	msg.addByte(0xB2);
 	msg.add<uint16_t>(channelId);
 	msg.addString(channelName);
-	msg.add<uint16_t>(0x01);
-	msg.addString(player->getName());
-	msg.add<uint16_t>(0x00);
 	writeToOutputBuffer(msg);
 }
 
@@ -1767,43 +1553,25 @@ void ProtocolGame::sendChannelsDialog()
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendChannel(uint16_t channelId, const std::string& channelName, const UsersMap* channelUsers,
-                               const InvitedMap* invitedUsers)
+void ProtocolGame::sendChannel(uint16_t channelId, const std::string& channelName, const UsersMap*, const InvitedMap*)
 {
+	// 7.x channel open: id + name, no user/invite lists.
 	NetworkMessage msg;
 	msg.addByte(0xAC);
 
 	msg.add<uint16_t>(channelId);
 	msg.addString(channelName);
 
-	if (channelUsers) {
-		msg.add<uint16_t>(channelUsers->size());
-		for (const auto& it : *channelUsers) {
-			msg.addString(it.second->getName());
-		}
-	} else {
-		msg.add<uint16_t>(0x00);
-	}
-
-	if (invitedUsers) {
-		msg.add<uint16_t>(invitedUsers->size());
-		for (const auto& it : *invitedUsers) {
-			msg.addString(it.second->getName());
-		}
-	} else {
-		msg.add<uint16_t>(0x00);
-	}
 	writeToOutputBuffer(msg);
 }
 
 void ProtocolGame::sendChannelMessage(const std::string& author, const std::string& text, SpeakClasses type,
                                       uint16_t channel)
 {
+	// No statement id and no speaker level on the 7.6 wire.
 	NetworkMessage msg;
 	msg.addByte(0xAA);
-	msg.add<uint32_t>(0x00);
 	msg.addString(author);
-	msg.add<uint16_t>(0x00);
 	msg.addByte(type);
 	msg.add<uint16_t>(channel);
 	msg.addString(text);
@@ -1812,46 +1580,33 @@ void ProtocolGame::sendChannelMessage(const std::string& author, const std::stri
 
 void ProtocolGame::sendIcons(uint32_t icons)
 {
+	// The 7.6 client reads the condition icons as a single byte.
 	NetworkMessage msg;
 	msg.addByte(0xA2);
-	msg.add<uint32_t>(icons);
+	msg.addByte(static_cast<uint8_t>(std::min<uint32_t>(icons, std::numeric_limits<uint8_t>::max())));
 	writeToOutputBuffer(msg);
 }
 
 void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool hasParent, uint16_t firstIndex)
 {
+	// 7.x container: item, name, capacity, has-parent, item count + items.
 	NetworkMessage msg;
 	msg.addByte(0x6E);
 
 	msg.addByte(cid);
 
-	if (container->getID() == ITEM_BROWSEFIELD) {
-		msg.addItem(ITEM_BAG, 1);
-		msg.addString("Browse Field");
-	} else {
-		msg.addItem(container);
-		msg.addString(container->getName());
-	}
+	msg.addItem(container);
+	msg.addString(container->getName());
 
 	msg.addByte(container->capacity());
 	msg.addByte(hasParent ? 0x01 : 0x00);
-	msg.addByte(0x00);                                     // show search icon (boolean)
-	msg.addByte(container->isUnlocked() ? 0x01 : 0x00);    // Drag and drop
-	msg.addByte(container->hasPagination() ? 0x01 : 0x00); // Pagination
 
-	uint32_t containerSize = container->size();
-	msg.add<uint16_t>(containerSize);
-	msg.add<uint16_t>(firstIndex);
-	if (firstIndex < containerSize) {
-		uint8_t itemsToSend = std::min<uint32_t>(std::min<uint32_t>(container->capacity(), containerSize - firstIndex),
-		                                         std::numeric_limits<uint8_t>::max());
+	msg.addByte(std::min<uint32_t>(0xFF, container->size()));
 
-		msg.addByte(itemsToSend);
-		for (auto it = container->getItemList().begin() + firstIndex, end = it + itemsToSend; it != end; ++it) {
-			msg.addItem(*it);
-		}
-	} else {
-		msg.addByte(0x00);
+	uint32_t i = 0;
+	const ItemDeque& itemList = container->getItemList();
+	for (auto it = itemList.begin() + firstIndex, end = itemList.end(); i < 0xFF && it != end; ++it, ++i) {
+		msg.addItem(*it);
 	}
 	writeToOutputBuffer(msg);
 }
@@ -1869,11 +1624,6 @@ void ProtocolGame::sendEmptyContainer(uint8_t cid)
 	msg.addByte(8);
 	msg.addByte(0x00);
 	msg.addByte(0x00);
-	msg.addByte(0x01);
-	msg.addByte(0x00);
-	msg.add<uint16_t>(0);
-	msg.add<uint16_t>(0);
-	msg.addByte(0x00);
 	writeToOutputBuffer(msg);
 }
 
@@ -1882,11 +1632,6 @@ void ProtocolGame::sendShop(Npc* npc, const ShopInfoList& itemList)
 	NetworkMessage msg;
 	msg.addByte(0x7A);
 	msg.addString(npc->getName());
-
-	// currency displayed in trade window (currently only gold supported) if item other than gold coin is sent, the shop
-	// window takes information about currency amount from player items packet (the one that updates action bars)
-	msg.add<uint16_t>(Item::items[ITEM_GOLD_COIN].clientId);
-	msg.addString(""); // doesn't show anywhere, could be used in otclient for currency name
 
 	uint16_t itemsToSend = std::min<size_t>(itemList.size(), std::numeric_limits<uint16_t>::max());
 	msg.add<uint16_t>(itemsToSend);
@@ -1990,27 +1735,14 @@ void ProtocolGame::sendSaleItemList(const std::list<ShopInfo>& shop)
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendResourceBalance(const ResourceTypes_t resourceType, uint64_t amount)
+void ProtocolGame::sendResourceBalance(const ResourceTypes_t, uint64_t)
 {
-	NetworkMessage msg;
-	msg.addByte(0xEE);
-	msg.addByte(resourceType);
-	msg.add<uint64_t>(amount);
-	writeToOutputBuffer(msg);
+	// 0xEE resource balances are unknown to the 7.6 client.
 }
 
 void ProtocolGame::sendStoreBalance()
 {
-	NetworkMessage msg;
-	msg.addByte(0xDF);
-	msg.addByte(0x01);
-
-	// placeholder packet / to do
-	msg.add<uint32_t>(0); // total store coins (transferable + non-t)
-	msg.add<uint32_t>(0); // transferable store coins
-	msg.add<uint32_t>(0); // reserved auction coins
-	msg.add<uint32_t>(0); // tournament coins
-	writeToOutputBuffer(msg);
+	// 0xDF store balance is unknown to the 7.6 client.
 }
 
 void ProtocolGame::sendMarketEnter()
@@ -2336,28 +2068,18 @@ void ProtocolGame::sendCreatureTurn(const Creature* creature, uint32_t stackpos)
 	msg.add<uint16_t>(0x63);
 	msg.add<uint32_t>(creature->getID());
 	msg.addByte(creature->getDirection());
-	msg.addByte(player->canWalkthroughEx(creature) ? 0x00 : 0x01);
 	writeToOutputBuffer(msg);
 }
 
 void ProtocolGame::sendCreatureSay(const Creature* creature, SpeakClasses type, const std::string& text,
                                    const Position* pos /* = nullptr*/)
 {
+	// The u32 statement id arrived with the 7.7 client; 7.6 expects the
+	// speaker name right away and desyncs on the extra dword.
 	NetworkMessage msg;
 	msg.addByte(0xAA);
 
-	static uint32_t statementId = 0;
-	msg.add<uint32_t>(++statementId);
-
 	msg.addString(creature->getName());
-	msg.addByte(0x00); // "(Traded)" suffix after player name
-
-	// Add level only for players
-	if (const Player* speaker = creature->getPlayer()) {
-		msg.add<uint16_t>(speaker->getLevel());
-	} else {
-		msg.add<uint16_t>(0x00);
-	}
 
 	msg.addByte(type);
 	if (pos) {
@@ -2376,21 +2098,10 @@ void ProtocolGame::sendToChannel(const Creature* creature, SpeakClasses type, co
 	NetworkMessage msg;
 	msg.addByte(0xAA);
 
-	static uint32_t statementId = 0;
-	msg.add<uint32_t>(++statementId);
 	if (!creature) {
-		msg.add<uint32_t>(0x00);
-		msg.addByte(0x00); // "(Traded)" suffix after player name
+		msg.addString("");
 	} else {
 		msg.addString(creature->getName());
-		msg.addByte(0x00); // "(Traded)" suffix after player name
-
-		// Add level only for players
-		if (const Player* speaker = creature->getPlayer()) {
-			msg.add<uint16_t>(speaker->getLevel());
-		} else {
-			msg.add<uint16_t>(0x00);
-		}
 	}
 
 	msg.addByte(type);
@@ -2399,19 +2110,29 @@ void ProtocolGame::sendToChannel(const Creature* creature, SpeakClasses type, co
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendLogMessage(const std::string& text)
+{
+	// TibiaFun: authorless line in the "Log" channel window (an empty speaker
+	// name renders as plain text in the client console). CHANNEL_O is the
+	// channel-orange talk type; TALKTYPE_CHANNEL_Y (yellow) and _R1 (red)
+	// stay available for events that should stand out.
+	NetworkMessage msg;
+	msg.addByte(0xAA);
+	msg.addString("");
+	msg.addByte(TALKTYPE_CHANNEL_O);
+	msg.add<uint16_t>(CHANNEL_LOG);
+	msg.addString(text);
+	writeToOutputBuffer(msg);
+}
+
 void ProtocolGame::sendPrivateMessage(const Player* speaker, SpeakClasses type, const std::string& text)
 {
 	NetworkMessage msg;
 	msg.addByte(0xAA);
-	static uint32_t statementId = 0;
-	msg.add<uint32_t>(++statementId);
 	if (speaker) {
 		msg.addString(speaker->getName());
-		msg.addByte(0x00); // "(Traded)" suffix after player name
-		msg.add<uint16_t>(speaker->getLevel());
 	} else {
-		msg.add<uint32_t>(0x00);
-		msg.addByte(0x00); // "(Traded)" suffix after player name
+		msg.addString("");
 	}
 	msg.addByte(type);
 	msg.addString(text);
@@ -2422,7 +2143,6 @@ void ProtocolGame::sendCancelTarget()
 {
 	NetworkMessage msg;
 	msg.addByte(0xA3);
-	msg.add<uint32_t>(0x00);
 	writeToOutputBuffer(msg);
 }
 
@@ -2431,8 +2151,7 @@ void ProtocolGame::sendChangeSpeed(const Creature* creature, uint32_t speed)
 	NetworkMessage msg;
 	msg.addByte(0x8F);
 	msg.add<uint32_t>(creature->getID());
-	msg.add<uint16_t>(creature->getBaseSpeed() / 2);
-	msg.add<uint16_t>(speed / 2);
+	msg.add<uint16_t>(speed);
 	writeToOutputBuffer(msg);
 }
 
@@ -2454,7 +2173,7 @@ void ProtocolGame::sendSkills()
 void ProtocolGame::sendPing()
 {
 	NetworkMessage msg;
-	msg.addByte(0x1D);
+	msg.addByte(0x1E);
 	writeToOutputBuffer(msg);
 }
 
@@ -2467,14 +2186,12 @@ void ProtocolGame::sendPingBack()
 
 void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, uint8_t type)
 {
+	// 7.x distance effect: from, to, effect byte (no 13.x effect loop).
 	NetworkMessage msg;
-	msg.addByte(0x83);
+	msg.addByte(0x85);
 	msg.addPosition(from);
-	msg.addByte(MAGIC_EFFECTS_CREATE_DISTANCEEFFECT);
+	msg.addPosition(to);
 	msg.addByte(type);
-	msg.addByte(static_cast<uint8_t>(static_cast<int8_t>(static_cast<int32_t>(to.x) - static_cast<int32_t>(from.x))));
-	msg.addByte(static_cast<uint8_t>(static_cast<int8_t>(static_cast<int32_t>(to.y) - static_cast<int32_t>(from.y))));
-	msg.addByte(MAGIC_EFFECTS_END_LOOP);
 	writeToOutputBuffer(msg);
 }
 
@@ -2484,12 +2201,33 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint8_t type)
 		return;
 	}
 
+	// 7.x magic effect: position + effect byte (no 13.x effect loop).
 	NetworkMessage msg;
 	msg.addByte(0x83);
 	msg.addPosition(pos);
-	msg.addByte(MAGIC_EFFECTS_CREATE_EFFECT);
 	msg.addByte(type);
-	msg.addByte(MAGIC_EFFECTS_END_LOOP);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendColoredText(const ColoredText& coloredText)
+{
+	if (!canSee(coloredText.position)) {
+		return;
+	}
+
+	// 0x84 animated text: the 7.x way to show damage/heal/exp numbers.
+	NetworkMessage msg;
+	msg.addByte(0x84);
+	msg.addPosition(coloredText.position);
+	msg.addByte(coloredText.color);
+	msg.addString(coloredText.text);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendWorldLight(LightInfo lightInfo)
+{
+	NetworkMessage msg;
+	AddWorldLight(msg, lightInfo);
 	writeToOutputBuffer(msg);
 }
 
@@ -2527,16 +2265,16 @@ void ProtocolGame::sendMapDescription(const Position& pos)
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendAddTileItem(const Position& pos, uint32_t stackpos, const Item* item)
+void ProtocolGame::sendAddTileItem(const Position& pos, uint32_t, const Item* item)
 {
 	if (!canSee(pos)) {
 		return;
 	}
 
+	// 7.x 0x6A carries no stackpos byte.
 	NetworkMessage msg;
 	msg.addByte(0x6A);
 	msg.addPosition(pos);
-	msg.addByte(stackpos);
 	msg.addItem(item);
 	writeToOutputBuffer(msg);
 }
@@ -2627,44 +2365,9 @@ void ProtocolGame::sendUpdateTile(const Tile* tile, const Position& pos)
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendUpdateCreatureIcons(const Creature* creature)
+void ProtocolGame::sendUpdateCreatureIcons(const Creature*)
 {
-	if (!canSee(creature->getPosition())) {
-		return;
-	}
-
-	NetworkMessage msg;
-	msg.addByte(0x8B);
-	msg.add<uint32_t>(creature->getID());
-	msg.addByte(14); // event player icons
-
-	AddCreatureIcons(msg, creature);
-	writeToOutputBuffer(msg);
-}
-
-void ProtocolGame::sendPendingStateEntered()
-{
-	NetworkMessage msg;
-	msg.addByte(0x0A);
-	writeToOutputBuffer(msg);
-}
-
-void ProtocolGame::sendEnterWorld()
-{
-	NetworkMessage msg;
-	msg.addByte(0x0F);
-	writeToOutputBuffer(msg);
-}
-
-void ProtocolGame::sendFightModes()
-{
-	NetworkMessage msg;
-	msg.addByte(0xA7);
-	msg.addByte(player->fightMode);
-	msg.addByte(player->chaseMode);
-	msg.addByte(player->secureMode);
-	msg.addByte(PVP_MODE_DOVE);
-	writeToOutputBuffer(msg);
+	// 0x8B creature icons are unknown to the 7.6 client.
 }
 
 void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos, int32_t stackpos,
@@ -2687,11 +2390,10 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 				sendUpdateTile(tile, pos);
 			}
 		} else {
-			// if stackpos is -1, the client will automatically detect it
+			// 7.x 0x6A carries no stackpos byte.
 			NetworkMessage msg;
 			msg.addByte(0x6A);
 			msg.addPosition(pos);
-			msg.addByte(stackpos);
 
 			bool known;
 			uint32_t removedKnown;
@@ -2706,19 +2408,26 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 		return;
 	}
 
-	// send player stats
-	sendStats();         // hp, cap, level, xp rate, etc.
-	sendSkills();        // skills and special skills
-	player->sendIcons(); // active conditions
+	// 7.x self-appear packet
+	NetworkMessage msg;
+	msg.addByte(0x0A);
 
-	// send client info
-	sendClientFeatures(); // player speed, bug reports, store url, pvp mode, etc
-	sendBasicData();      // premium account, vocation, known spells, prey system status, magic shield status
-	sendItems();          // send carried items for action bars
+	msg.add<uint32_t>(player->getID());
+	msg.addByte(0x32); // beat duration (50)
+	msg.addByte(0x00);
 
-	// enter world and send game screen
-	sendPendingStateEntered();
-	sendEnterWorld();
+	// can report bugs?
+	msg.addByte(player->getAccountType() >= ACCOUNT_TYPE_TUTOR ? 0x01 : 0x00);
+
+	if (player->getAccountType() >= ACCOUNT_TYPE_GAMEMASTER) {
+		msg.addByte(0x0B);
+		for (uint8_t i = 0; i < 32; i++) {
+			msg.addByte(0xFF);
+		}
+	}
+
+	writeToOutputBuffer(msg);
+
 	sendMapDescription(pos);
 
 	// send login effect
@@ -2731,8 +2440,11 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 		sendInventoryItem(static_cast<slots_t>(i), player->getInventoryItem(static_cast<slots_t>(i)));
 	}
 
-	// send store inbox
-	sendInventoryItem(CONST_SLOT_STORE_INBOX, player->getStoreInbox()->getItem());
+	sendStats();
+	sendSkills();
+
+	// gameworld light-settings
+	sendWorldLight(g_game.getWorldLightInfo());
 
 	// player light level
 	sendCreatureLight(creature);
@@ -2740,11 +2452,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	// player vip list
 	sendVIPEntries();
 
-	// tiers for forge and market
-	sendItemClasses();
-
-	// opened containers
-	player->openSavedContainers();
+	player->sendIcons(); // active conditions
 }
 
 void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& newPos, int32_t newStackPos,
@@ -2835,38 +2543,17 @@ void ProtocolGame::sendInventoryItem(slots_t slot, const Item* item)
 	writeToOutputBuffer(msg);
 }
 
-// to do: make it lightweight, update each time player gets/loses an item
 void ProtocolGame::sendItems()
 {
-	NetworkMessage msg;
-	msg.addByte(0xF5);
-
-	// find all items carried by character (itemId, amount)
-	std::map<uint32_t, uint32_t> inventory;
-	player->getAllItemTypeCount(inventory);
-
-	msg.add<uint16_t>(inventory.size() + 11);
-	for (uint16_t i = 1; i <= 11; i++) {
-		msg.add<uint16_t>(i); // slotId
-		msg.addByte(0);       // always 0
-		msg.add<uint16_t>(1); // always 1
-	}
-
-	for (const auto& item : inventory) {
-		msg.add<uint16_t>(Item::items[item.first].clientId); // item clientId
-		msg.addByte(0);                                      // always 0
-		msg.add<uint16_t>(item.second);                      // count
-	}
-
-	writeToOutputBuffer(msg);
+	// 0xF5 action-bar item list is unknown to the 7.6 client.
 }
 
-void ProtocolGame::sendAddContainerItem(uint8_t cid, uint16_t slot, const Item* item)
+void ProtocolGame::sendAddContainerItem(uint8_t cid, uint16_t, const Item* item)
 {
+	// 7.x adds container items to the front; no slot on the wire.
 	NetworkMessage msg;
 	msg.addByte(0x70);
 	msg.addByte(cid);
-	msg.add<uint16_t>(slot);
 	msg.addItem(item);
 	writeToOutputBuffer(msg);
 }
@@ -2876,22 +2563,17 @@ void ProtocolGame::sendUpdateContainerItem(uint8_t cid, uint16_t slot, const Ite
 	NetworkMessage msg;
 	msg.addByte(0x71);
 	msg.addByte(cid);
-	msg.add<uint16_t>(slot);
+	msg.addByte(slot);
 	msg.addItem(item);
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendRemoveContainerItem(uint8_t cid, uint16_t slot, const Item* lastItem)
+void ProtocolGame::sendRemoveContainerItem(uint8_t cid, uint16_t slot, const Item*)
 {
 	NetworkMessage msg;
 	msg.addByte(0x72);
 	msg.addByte(cid);
-	msg.add<uint16_t>(slot);
-	if (lastItem) {
-		msg.addItem(lastItem);
-	} else {
-		msg.add<uint16_t>(0x00);
-	}
+	msg.addByte(slot);
 	writeToOutputBuffer(msg);
 }
 
@@ -2911,21 +2593,8 @@ void ProtocolGame::sendTextWindow(uint32_t windowTextId, Item* item, uint16_t ma
 		msg.addString(text);
 	}
 
-	const std::string& writer = item->getWriter();
-	if (!writer.empty()) {
-		msg.addString(writer);
-	} else {
-		msg.add<uint16_t>(0x00);
-	}
-
-	msg.addByte(0x00); // "(traded)" suffix after player name (bool)
-
-	time_t writtenDate = item->getDate();
-	if (writtenDate != 0) {
-		msg.addString(formatDateShort(writtenDate));
-	} else {
-		msg.add<uint16_t>(0x00);
-	}
+	// 7.x text window: writer name only — no "(traded)" flag, no date.
+	msg.addString(item->getWriter());
 
 	writeToOutputBuffer(msg);
 }
@@ -2938,9 +2607,7 @@ void ProtocolGame::sendTextWindow(uint32_t windowTextId, uint32_t itemId, const 
 	msg.addItem(itemId, 1);
 	msg.add<uint16_t>(text.size());
 	msg.addString(text);
-	msg.add<uint16_t>(0x00); // writer name
-	msg.addByte(0x00);       // "(traded)" byte
-	msg.add<uint16_t>(0x00); // date
+	msg.addString(""); // writer name
 	writeToOutputBuffer(msg);
 }
 
@@ -2954,278 +2621,71 @@ void ProtocolGame::sendHouseWindow(uint32_t windowTextId, const std::string& tex
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendCombatAnalyzer(CombatType_t type, int32_t amount, DamageAnalyzerImpactType impactType,
-                                      const std::string& target)
+void ProtocolGame::sendCombatAnalyzer(CombatType_t, int32_t, DamageAnalyzerImpactType, const std::string&)
 {
-	NetworkMessage msg;
-	msg.addByte(0xCC);
-	msg.addByte(impactType);
-	msg.add<uint32_t>(amount);
-
-	switch (impactType) {
-		case RECEIVED:
-			msg.addByte(getClientDamageType(type));
-			msg.addString(target);
-			break;
-
-		case DEALT:
-			msg.addByte(getClientDamageType(type));
-			break;
-
-		default:
-			break;
-	}
-	writeToOutputBuffer(msg);
+	// 0xCC combat analyzer is unknown to the 7.6 client.
 }
 
 void ProtocolGame::sendOutfitWindow()
 {
-	const auto& outfits = Outfits::getInstance().getOutfits(player->getSex());
-	if (outfits.size() == 0) {
-		return;
-	}
-
+	// 7.6 outfit picker: current outfit + a first/last outfit id range,
+	// all single-byte ids.
 	NetworkMessage msg;
 	msg.addByte(0xC8);
 
 	Outfit_t currentOutfit = player->getDefaultOutfit();
-
-	if (currentOutfit.lookType == 0) {
-		Outfit_t newOutfit;
-		newOutfit.lookType = outfits.front().lookType;
-		currentOutfit = newOutfit;
-	}
-
-	Mount* currentMount = g_game.mounts.getMountByID(player->getCurrentMount());
-	if (currentMount) {
-		currentOutfit.lookMount = currentMount->clientId;
-	}
-
-	bool mounted;
-	if (player->wasMounted) {
-		mounted = currentOutfit.lookMount != 0;
-	} else {
-		mounted = player->isMounted();
-	}
-
 	AddOutfit(msg, currentOutfit);
 
-	// mount color bytes are required here regardless of having one
-	if (currentOutfit.lookMount == 0) {
-		msg.addByte(currentOutfit.lookMountHead);
-		msg.addByte(currentOutfit.lookMountBody);
-		msg.addByte(currentOutfit.lookMountLegs);
-		msg.addByte(currentOutfit.lookMountFeet);
-	}
-
-	msg.add<uint16_t>(0); // current familiar looktype
-
-	std::vector<ProtocolOutfit> protocolOutfits;
-	if (player->isAccessPlayer()) {
-		protocolOutfits.emplace_back("Gamemaster", 75, 0);
-	}
-
-	for (const Outfit& outfit : outfits) {
-		uint8_t addons;
-		if (!player->getOutfitAddons(outfit, addons)) {
-			continue;
+	uint8_t firstOutfit;
+	uint8_t lastOutfit;
+	switch (player->getSex()) {
+		case PLAYERSEX_FEMALE: {
+			firstOutfit = 136;
+			lastOutfit = player->isPremium() ? 142 : 139;
+			break;
 		}
 
-		protocolOutfits.emplace_back(outfit.name, outfit.lookType, addons);
-	}
+		case PLAYERSEX_MALE: {
+			firstOutfit = 128;
+			lastOutfit = player->isPremium() ? 134 : 131;
+			break;
+		}
 
-	msg.add<uint16_t>(protocolOutfits.size());
-	for (const ProtocolOutfit& outfit : protocolOutfits) {
-		msg.add<uint16_t>(outfit.lookType);
-		msg.addString(outfit.name);
-		msg.addByte(outfit.addons);
-		msg.addByte(0x00); // mode: 0x00 - available, 0x01 store (requires U32 store offerId), 0x02 golden outfit
-		                   // tooltip (hardcoded)
-	}
-
-	std::vector<const Mount*> mounts;
-	for (const Mount& mount : g_game.mounts.getMounts()) {
-		if (player->hasMount(&mount)) {
-			mounts.push_back(&mount);
+		default: {
+			firstOutfit = 128;
+			lastOutfit = 134;
 		}
 	}
 
-	msg.add<uint16_t>(mounts.size());
-	for (const Mount* mount : mounts) {
-		msg.add<uint16_t>(mount->clientId);
-		msg.addString(mount->name);
-		msg.addByte(0x00); // mode: 0x00 - available, 0x01 store (requires U32 store offerId)
-	}
+	msg.addByte(firstOutfit);
+	msg.addByte(lastOutfit);
 
-	msg.add<uint16_t>(0x00); // familiars.size()
-	// size > 0
-	// U16 looktype
-	// String name
-	// 0x00 // mode: 0x00 - available, 0x01 store (requires U32 store offerId)
-
-	msg.addByte(0x00); // Try outfit mode (?)
-	msg.addByte(mounted ? 0x01 : 0x00);
-	msg.addByte(player->randomizeMount ? 0x01 : 0x00);
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendPodiumWindow(const Item* item)
+void ProtocolGame::sendPodiumWindow(const Item*)
 {
-	if (!item) {
-		return;
-	}
-
-	const Podium* podium = item->getPodium();
-	if (!podium) {
-		return;
-	}
-
-	const Tile* tile = item->getTile();
-	if (!tile) {
-		return;
-	}
-
-	int32_t stackpos = tile->getThingIndex(item);
-
-	// read podium outfit
-	Outfit_t podiumOutfit = podium->getOutfit();
-	Outfit_t playerOutfit = player->getDefaultOutfit();
-	bool isEmpty = podiumOutfit.lookType == 0 && podiumOutfit.lookMount == 0;
-
-	if (podiumOutfit.lookType == 0) {
-		// copy player outfit
-		podiumOutfit.lookType = playerOutfit.lookType;
-		podiumOutfit.lookHead = playerOutfit.lookHead;
-		podiumOutfit.lookBody = playerOutfit.lookBody;
-		podiumOutfit.lookLegs = playerOutfit.lookLegs;
-		podiumOutfit.lookFeet = playerOutfit.lookFeet;
-		podiumOutfit.lookAddons = playerOutfit.lookAddons;
-	}
-
-	if (podiumOutfit.lookMount == 0) {
-		// copy player mount
-		podiumOutfit.lookMount = playerOutfit.lookMount;
-		podiumOutfit.lookMountHead = playerOutfit.lookMountHead;
-		podiumOutfit.lookMountBody = playerOutfit.lookMountBody;
-		podiumOutfit.lookMountLegs = playerOutfit.lookMountLegs;
-		podiumOutfit.lookMountFeet = playerOutfit.lookMountFeet;
-	}
-
-	// fetch player outfits
-	const auto& outfits = Outfits::getInstance().getOutfits(player->getSex());
-	if (outfits.size() == 0) {
-		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
-		return;
-	}
-
-	// add GM outfit for staff members
-	std::vector<ProtocolOutfit> protocolOutfits;
-	if (player->isAccessPlayer()) {
-		protocolOutfits.emplace_back("Gamemaster", 75, 0);
-	}
-
-	// fetch player addons info
-	for (const Outfit& outfit : outfits) {
-		uint8_t addons;
-		if (!player->getOutfitAddons(outfit, addons)) {
-			continue;
-		}
-
-		protocolOutfits.emplace_back(outfit.name, outfit.lookType, addons);
-	}
-
-	// select first outfit available when the one from podium is not unlocked
-	if (!player->canWear(podiumOutfit.lookType, 0)) {
-		podiumOutfit.lookType = outfits.front().lookType;
-	}
-
-	// fetch player mounts
-	std::vector<const Mount*> mounts;
-	for (const Mount& mount : g_game.mounts.getMounts()) {
-		if (player->hasMount(&mount)) {
-			mounts.push_back(&mount);
-		}
-	}
-
-	// packet header
-	NetworkMessage msg;
-	msg.addByte(0xC8);
-
-	// current outfit
-	msg.add<uint16_t>(podiumOutfit.lookType);
-	msg.addByte(podiumOutfit.lookHead);
-	msg.addByte(podiumOutfit.lookBody);
-	msg.addByte(podiumOutfit.lookLegs);
-	msg.addByte(podiumOutfit.lookFeet);
-	msg.addByte(podiumOutfit.lookAddons);
-
-	// current mount
-	msg.add<uint16_t>(podiumOutfit.lookMount);
-	msg.addByte(podiumOutfit.lookMountHead);
-	msg.addByte(podiumOutfit.lookMountBody);
-	msg.addByte(podiumOutfit.lookMountLegs);
-	msg.addByte(podiumOutfit.lookMountFeet);
-
-	// current familiar (not used in podium mode)
-	msg.add<uint16_t>(0);
-
-	// available outfits
-	msg.add<uint16_t>(protocolOutfits.size());
-	for (const ProtocolOutfit& outfit : protocolOutfits) {
-		msg.add<uint16_t>(outfit.lookType);
-		msg.addString(outfit.name);
-		msg.addByte(outfit.addons);
-		msg.addByte(0x00); // mode: 0x00 - available, 0x01 store (requires U32 store offerId), 0x02 golden outfit
-		                   // tooltip (hardcoded)
-	}
-
-	// available mounts
-	msg.add<uint16_t>(mounts.size());
-	for (const Mount* mount : mounts) {
-		msg.add<uint16_t>(mount->clientId);
-		msg.addString(mount->name);
-		msg.addByte(0x00); // mode: 0x00 - available, 0x01 store (requires U32 store offerId)
-	}
-
-	// available familiars (not used in podium mode)
-	msg.add<uint16_t>(0);
-
-	msg.addByte(0x05); // "set outfit" window mode (5 = podium)
-	msg.addByte((isEmpty && playerOutfit.lookMount != 0) || podium->hasFlag(PODIUM_SHOW_MOUNT)
-	                ? 0x01
-	                : 0x00); // "mount" checkbox
-	msg.add<uint16_t>(0);    // unknown
-	msg.addPosition(item->getPosition());
-	msg.add<uint16_t>(item->getClientID());
-	msg.addByte(stackpos);
-
-	msg.addByte(podium->hasFlag(PODIUM_SHOW_PLATFORM) ? 0x01 : 0x00); // is platform visible
-	msg.addByte(0x01);                                                // "outfit" checkbox, ignored by the client
-	msg.addByte(podium->getDirection());                              // outfit direction
-	writeToOutputBuffer(msg);
+	// Podiums are unknown to the 7.6 client.
 }
 
 void ProtocolGame::sendUpdatedVIPStatus(uint32_t guid, VipStatus_t newStatus)
 {
+	// 7.x: 0xD3 = buddy went online, 0xD4 = buddy went offline; guid only.
 	NetworkMessage msg;
-	msg.addByte(0xD3);
+	msg.addByte(newStatus == VIPSTATUS_OFFLINE ? 0xD4 : 0xD3);
 	msg.add<uint32_t>(guid);
-	msg.addByte(newStatus);
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendVIP(uint32_t guid, const std::string& name, const std::string& description, uint32_t icon,
-                           bool notify, VipStatus_t status)
+void ProtocolGame::sendVIP(uint32_t guid, const std::string& name, const std::string&, uint32_t, bool,
+                           VipStatus_t status)
 {
+	// 7.x VIP entry: guid, name, online flag.
 	NetworkMessage msg;
 	msg.addByte(0xD2);
 	msg.add<uint32_t>(guid);
 	msg.addString(name);
-	msg.addString(description);
-	msg.add<uint32_t>(std::min<uint32_t>(10, icon));
-	msg.addByte(notify ? 0x01 : 0x00);
-	msg.addByte(status);
-	msg.addByte(0x00); // vipGroups (placeholder)
+	msg.addByte(status == VIPSTATUS_OFFLINE ? 0x00 : 0x01);
 	writeToOutputBuffer(msg);
 }
 
@@ -3248,114 +2708,38 @@ void ProtocolGame::sendVIPEntries()
 
 void ProtocolGame::sendItemClasses()
 {
-	NetworkMessage msg;
-	msg.addByte(0x86);
-
-	uint8_t classSize = 4;
-	uint8_t tiersSize = 10;
-
-	// item classes
-	msg.addByte(classSize);
-	for (uint8_t i = 0; i < classSize; i++) {
-		msg.addByte(i + 1); // class id
-
-		// item tiers
-		msg.addByte(tiersSize); // tiers size
-		for (uint8_t j = 0; j < tiersSize; j++) {
-			msg.addByte(j);           // tier id
-			msg.add<uint64_t>(10000); // upgrade cost
-		}
-	}
-
-	// unknown
-	for (uint8_t i = 0; i < tiersSize + 1; i++) {
-		msg.addByte(0);
-	}
-
-	writeToOutputBuffer(msg);
+	// 0x86 item classes/tiers are unknown to the 7.6 client.
 }
 
-void ProtocolGame::sendSpellCooldown(uint8_t spellId, uint32_t time)
+void ProtocolGame::sendSpellCooldown(uint8_t, uint32_t)
 {
-	NetworkMessage msg;
-	msg.addByte(0xA4);
-	msg.add<uint16_t>(static_cast<uint16_t>(spellId));
-	msg.add<uint32_t>(time);
-	writeToOutputBuffer(msg);
+	// 0xA4 spell cooldowns are unknown to the 7.6 client.
 }
 
-void ProtocolGame::sendSpellGroupCooldown(SpellGroup_t groupId, uint32_t time)
+void ProtocolGame::sendSpellGroupCooldown(SpellGroup_t, uint32_t)
 {
-	NetworkMessage msg;
-	msg.addByte(0xA5);
-	msg.addByte(groupId);
-	msg.add<uint32_t>(time);
-	writeToOutputBuffer(msg);
+	// 0xA5 spell group cooldowns are unknown to the 7.6 client.
 }
 
-void ProtocolGame::sendUseItemCooldown(uint32_t time)
+void ProtocolGame::sendUseItemCooldown(uint32_t)
 {
-	NetworkMessage msg;
-	msg.addByte(0xA6);
-	msg.add<uint32_t>(time);
-	writeToOutputBuffer(msg);
+	// 0xA6 item cooldowns are unknown to the 7.6 client.
 }
 
-void ProtocolGame::sendSupplyUsed(const uint16_t clientId)
+void ProtocolGame::sendSupplyUsed(const uint16_t)
 {
-	NetworkMessage msg;
-	msg.addByte(0xCE);
-	msg.add<uint16_t>(clientId);
-
-	writeToOutputBuffer(msg);
+	// 0xCE supply-used is unknown to the 7.6 client.
 }
 
-void ProtocolGame::sendModalWindow(const ModalWindow& modalWindow)
+void ProtocolGame::sendModalWindow(const ModalWindow&)
 {
-	NetworkMessage msg;
-	msg.addByte(0xFA);
-
-	msg.add<uint32_t>(modalWindow.id);
-	msg.addString(modalWindow.title);
-	msg.addString(modalWindow.message);
-
-	msg.addByte(modalWindow.buttons.size());
-	for (const auto& it : modalWindow.buttons) {
-		msg.addString(it.first);
-		msg.addByte(it.second);
-	}
-
-	msg.addByte(modalWindow.choices.size());
-	for (const auto& it : modalWindow.choices) {
-		msg.addString(it.first);
-		msg.addByte(it.second);
-	}
-
-	msg.addByte(modalWindow.defaultEscapeButton);
-	msg.addByte(modalWindow.defaultEnterButton);
-	msg.addByte(modalWindow.priority ? 0x01 : 0x00);
-
-	writeToOutputBuffer(msg);
+	// Modal windows are unknown to the 7.6 client.
 }
 
 ////////////// Add common messages
 void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bool known, uint32_t remove)
 {
-	CreatureType_t creatureType = creature->getType();
 	const Player* otherPlayer = creature->getPlayer();
-	const Player* masterPlayer = nullptr;
-	uint32_t masterId = 0;
-
-	if (creatureType == CREATURETYPE_MONSTER) {
-		const Creature* master = creature->getMaster();
-		if (master) {
-			masterPlayer = master->getPlayer();
-			if (masterPlayer) {
-				masterId = master->getID();
-				creatureType = CREATURETYPE_SUMMON_OWN;
-			}
-		}
-	}
 
 	if (known) {
 		msg.add<uint16_t>(0x62);
@@ -3364,13 +2748,7 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 		msg.add<uint16_t>(0x61);
 		msg.add<uint32_t>(remove);
 		msg.add<uint32_t>(creature->getID());
-		msg.addByte(creature->isHealthHidden() ? CREATURETYPE_HIDDEN : creatureType);
-
-		if (creatureType == CREATURETYPE_SUMMON_OWN) {
-			msg.add<uint32_t>(masterId);
-		}
-
-		msg.addString(creature->isHealthHidden() ? "" : creature->getName());
+		msg.addString(creature->getName());
 	}
 
 	if (creature->isHealthHidden()) {
@@ -3394,165 +2772,61 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 	msg.addByte(player->isAccessPlayer() ? 0xFF : lightInfo.level);
 	msg.addByte(lightInfo.color);
 
-	msg.add<uint16_t>(creature->getStepSpeed() / 2);
-
-	msg.addByte(0x00); // creature debuffs, to do
-	/*
-	if (icon != CREATUREICON_NONE) {
-	        msg.addByte(icon);
-	        msg.addByte(1);
-	        msg.add<uint16_t>(0);
-	}
-	*/
+	msg.add<uint16_t>(creature->getStepSpeed());
 
 	msg.addByte(player->getSkullClient(creature));
 	msg.addByte(player->getPartyShield(otherPlayer));
-
-	if (!known) {
-		msg.addByte(player->getGuildEmblem(otherPlayer));
-	}
-
-	// Creature type and summon emblem
-	msg.addByte(creature->isHealthHidden() ? CREATURETYPE_HIDDEN : creatureType);
-	if (creatureType == CREATURETYPE_SUMMON_OWN) {
-		msg.add<uint32_t>(masterId);
-	}
-
-	// Player vocation info
-	if (creatureType == CREATURETYPE_PLAYER) {
-		msg.addByte(otherPlayer ? otherPlayer->getVocation()->getClientId() : 0x00);
-	}
-
-	msg.addByte(creature->getSpeechBubble());
-	msg.addByte(0xFF); // MARK_UNMARKED
-	msg.addByte(0x00); // inspection type (bool?)
-
-	msg.addByte(player->canWalkthroughEx(creature) ? 0x00 : 0x01);
-}
-
-void ProtocolGame::AddCreatureIcons(NetworkMessage& msg, const Creature* creature)
-{
-	const auto& creatureIcons = creature->getIcons();
-	if (const Monster* monster = creature->getMonster()) {
-		const auto& monsterIcons = monster->getSpecialIcons();
-		msg.addByte(creatureIcons.size() + monsterIcons.size());
-		for (const auto& [iconId, level] : monsterIcons) {
-			msg.addByte(iconId);
-			msg.addByte(1);
-			msg.add<uint16_t>(level);
-		}
-	} else {
-		msg.addByte(creatureIcons.size());
-	}
-
-	for (const auto& [iconId, level] : creatureIcons) {
-		msg.addByte(iconId);
-		msg.addByte(0);
-		msg.add<uint16_t>(level);
-	}
 }
 
 void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 {
+	// 7.x stats: u16 hp/maxhp, u16 cap, u32 exp (capped), u16 level + %,
+	// u16 mana/maxmana, u8 maglevel + %, u8 soul.
 	msg.addByte(0xA0);
 
-	msg.add<uint32_t>(static_cast<uint32_t>(player->getHealth()));
-	msg.add<uint32_t>(static_cast<uint32_t>(player->getMaxHealth()));
+	msg.add<uint16_t>(std::min<int32_t>(player->getHealth(), std::numeric_limits<uint16_t>::max()));
+	msg.add<uint16_t>(std::min<int32_t>(player->getMaxHealth(), std::numeric_limits<uint16_t>::max()));
 
-	msg.add<uint32_t>(player->hasFlag(PlayerFlag_HasInfiniteCapacity) ? 1000000 : player->getFreeCapacity());
-	msg.add<uint64_t>(player->getExperience());
+	msg.add<uint16_t>(player->hasFlag(PlayerFlag_HasInfiniteCapacity) ? 10000 : (player->getFreeCapacity() / 100));
+
+	// the 7.6 client debugs if the value is higher than 0x7FFFFFFF
+	msg.add<uint32_t>(std::min<uint64_t>(player->getExperience(), 0x7FFFFFFF));
 
 	msg.add<uint16_t>(player->getLevel());
 	msg.addByte(player->getLevelPercent());
 
-	msg.add<uint16_t>(player->getClientExpDisplay());
-	msg.add<uint16_t>(player->getClientLowLevelBonusDisplay());
-	msg.add<uint16_t>(0); // store exp bonus
-	msg.add<uint16_t>(player->getClientStaminaBonusDisplay());
+	msg.add<uint16_t>(std::min<int32_t>(player->getMana(), std::numeric_limits<uint16_t>::max()));
+	msg.add<uint16_t>(std::min<int32_t>(player->getMaxMana(), std::numeric_limits<uint16_t>::max()));
 
-	msg.add<uint32_t>(static_cast<uint32_t>(player->getMana()));
-	msg.add<uint32_t>(static_cast<uint32_t>(player->getMaxMana()));
+	msg.addByte(std::min<uint32_t>(player->getMagicLevel(), std::numeric_limits<uint8_t>::max()));
+	msg.addByte(player->getMagicLevelPercent());
 
 	msg.addByte(player->getSoul());
-	msg.add<uint16_t>(player->getStaminaMinutes());
-	msg.add<uint16_t>(player->getBaseSpeed() / 2);
-
-	Condition* condition = player->getCondition(CONDITION_REGENERATION, CONDITIONID_DEFAULT);
-	msg.add<uint16_t>(condition ? condition->getTicks() / 1000 : 0x00);
-
-	msg.add<uint16_t>(player->getOfflineTrainingTime() / 60 / 1000);
-
-	msg.add<uint16_t>(0); // xp boost time (seconds)
-	msg.addByte(0x00);    // enables exp boost in the store
-
-	if (ConditionManaShield* conditionManaShield =
-	        dynamic_cast<ConditionManaShield*>(player->getCondition(CONDITION_MANASHIELD_BREAKABLE))) {
-		msg.add<uint32_t>(conditionManaShield->getManaShield());
-		msg.add<uint32_t>(conditionManaShield->getMaxManaShield());
-	} else {
-		msg.add<uint32_t>(0); // remaining mana shield
-		msg.add<uint32_t>(0); // total mana shield
-	}
 }
 
 void ProtocolGame::AddPlayerSkills(NetworkMessage& msg)
 {
+	// 7.x skills: level byte + percent byte per skill, nothing else.
 	msg.addByte(0xA1);
-	msg.add<uint16_t>(player->getMagicLevel());
-	msg.add<uint16_t>(player->getBaseMagicLevel());
-	msg.add<uint16_t>(player->getBaseMagicLevel()); // base + loyalty bonus(?)
-	msg.add<uint16_t>(player->getMagicLevelPercent());
 
 	for (uint8_t i = SKILL_FIRST; i <= SKILL_LAST; ++i) {
-		msg.add<uint16_t>(std::min<int32_t>(player->getSkillLevel(i), std::numeric_limits<uint16_t>::max()));
-		msg.add<uint16_t>(player->getBaseSkill(i));
-		msg.add<uint16_t>(player->getBaseSkill(i)); // base + loyalty bonus(?)
-		msg.add<uint16_t>(player->getSkillPercent(i));
+		msg.addByte(std::min<int32_t>(player->getSkillLevel(i), std::numeric_limits<uint8_t>::max()));
+		msg.addByte(player->getSkillPercent(i));
 	}
-
-	for (uint8_t i = SPECIALSKILL_FIRST; i <= SPECIALSKILL_LAST; ++i) {
-		msg.add<uint16_t>(std::min<int32_t>(10000, player->varSpecialSkills[i])); // base + bonus special skill
-		msg.add<uint16_t>(0);                                                     // base special skill
-	}
-
-	msg.addByte(0); // element magic level
-	// structure:
-	// u8 client element id
-	// u16 bonus element ml
-
-	// fatal, dodge, momentum
-	for (int i = 0; i < 3; ++i) {
-		msg.add<uint16_t>(0);
-		msg.add<uint16_t>(0);
-	}
-
-	// to do: bonus cap
-	uint32_t capacityValue = player->hasFlag(PlayerFlag_HasInfiniteCapacity) ? 1000000 : player->getCapacity();
-	msg.add<uint32_t>(capacityValue); // base + bonus capacity
-	msg.add<uint32_t>(capacityValue); // base capacity
 }
 
 void ProtocolGame::AddOutfit(NetworkMessage& msg, const Outfit_t& outfit)
 {
-	// outfit
-	msg.add<uint16_t>(outfit.lookType);
+	// The 7.6 client reads lookType as a single byte; CipSoft widened it to
+	// u16 with 7.7. No addons, no mount.
+	msg.addByte(std::min<uint16_t>(outfit.lookType, std::numeric_limits<uint8_t>::max()));
 	if (outfit.lookType != 0) {
 		msg.addByte(outfit.lookHead);
 		msg.addByte(outfit.lookBody);
 		msg.addByte(outfit.lookLegs);
 		msg.addByte(outfit.lookFeet);
-		msg.addByte(outfit.lookAddons);
 	} else {
 		msg.addItemId(outfit.lookTypeEx);
-	}
-
-	// mount
-	msg.add<uint16_t>(outfit.lookMount);
-	if (outfit.lookMount != 0) {
-		msg.addByte(outfit.lookMountHead);
-		msg.addByte(outfit.lookMountBody);
-		msg.addByte(outfit.lookMountLegs);
-		msg.addByte(outfit.lookMountFeet);
 	}
 }
 
