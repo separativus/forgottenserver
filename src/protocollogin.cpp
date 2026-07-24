@@ -118,12 +118,35 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	msg.skipBytes(2); // client OS
 
 	uint16_t version = msg.get<uint16_t>();
-	if (version != 760) {
+	if (version < 760) {
 		disconnectClient(fmt::format("Only clients with protocol {:s} allowed!", CLIENT_VERSION_STR));
 		return;
 	}
 
 	msg.skipBytes(12); // dat, spr, pic signatures (4 bytes each)
+
+	// The 7.6 client predates the RSA/XTEA handshake (encryption was
+	// introduced with 7.61), so a 760 login stays plaintext end-to-end; the
+	// account number and password follow the signatures directly.
+	if (version > 760) {
+		if (!Protocol::RSA_decrypt(msg)) {
+			disconnect();
+			return;
+		}
+
+		xtea::key key;
+		key[0] = msg.get<uint32_t>();
+		key[1] = msg.get<uint32_t>();
+		key[2] = msg.get<uint32_t>();
+		key[3] = msg.get<uint32_t>();
+		enableXTEAEncryption();
+		setXTEAKey(key);
+	}
+
+	if (version > CLIENT_VERSION_MAX) {
+		disconnectClient(fmt::format("Only clients with protocol {:s} allowed!", CLIENT_VERSION_STR));
+		return;
+	}
 
 	if (g_game.getGameState() == GAME_STATE_STARTUP) {
 		disconnectClient("Gameworld is starting up. Please wait.");

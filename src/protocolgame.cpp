@@ -331,8 +331,29 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	version = msg.get<uint16_t>(); // U16 client version
 
 	// The 7.6 client sends nothing else before the gamemaster flag: no U32
-	// version, no dat revision, no RSA/XTEA envelope, no session key.
-	if (version != 760) {
+	// version, no dat revision, no RSA/XTEA envelope, no session key. 7.61+
+	// wraps the XTEA key and credentials in an RSA envelope.
+	if (version < 760) {
+		disconnectClient(fmt::format("Only clients with protocol {:s} allowed!", CLIENT_VERSION_STR));
+		return;
+	}
+
+	if (version > 760) {
+		if (!Protocol::RSA_decrypt(msg)) {
+			disconnect();
+			return;
+		}
+
+		xtea::key key;
+		key[0] = msg.get<uint32_t>();
+		key[1] = msg.get<uint32_t>();
+		key[2] = msg.get<uint32_t>();
+		key[3] = msg.get<uint32_t>();
+		enableXTEAEncryption();
+		setXTEAKey(key);
+	}
+
+	if (version > CLIENT_VERSION_MAX) {
 		disconnectClient(fmt::format("Only clients with protocol {:s} allowed!", CLIENT_VERSION_STR));
 		return;
 	}
@@ -892,9 +913,11 @@ void ProtocolGame::parseOpenPrivateChannel(NetworkMessage& msg)
 void ProtocolGame::parseAutoWalk(NetworkMessage& msg)
 {
 	uint8_t numdirs = msg.getByte();
-	// Plaintext framing: the message length covers the 2-byte header and the
-	// buffer position starts past it, so both sides already line up.
-	if (numdirs == 0 || (msg.getBufferPosition() + numdirs) != msg.getLength()) {
+	// Plaintext framing (760): the message length covers the 2-byte header
+	// and the buffer position starts past it, so both sides line up. XTEA
+	// framing (772): the position starts past the inner length word while
+	// the length is the inner payload, leaving a fixed offset of 4.
+	if (numdirs == 0 || (msg.getBufferPosition() + numdirs) != (msg.getLength() + (version > 760 ? 4 : 0))) {
 		return;
 	}
 
@@ -945,10 +968,10 @@ void ProtocolGame::parseAutoWalk(NetworkMessage& msg)
 
 void ProtocolGame::parseSetOutfit(NetworkMessage& msg)
 {
-	// The 7.6 client sends the lookType as a single byte and knows neither
-	// addons nor mounts.
+	// The 7.6 client sends the lookType as a single byte (7.7 widened it to
+	// u16); neither knows addons or mounts.
 	Outfit_t newOutfit;
-	newOutfit.lookType = msg.getByte();
+	newOutfit.lookType = version <= 760 ? msg.getByte() : msg.get<uint16_t>();
 	newOutfit.lookHead = msg.getByte();
 	newOutfit.lookBody = msg.getByte();
 	newOutfit.lookLegs = msg.getByte();
@@ -1581,9 +1604,12 @@ void ProtocolGame::sendChannel(uint16_t channelId, const std::string& channelNam
 void ProtocolGame::sendChannelMessage(const std::string& author, const std::string& text, SpeakClasses type,
                                       uint16_t channel)
 {
-	// No statement id and no speaker level on the 7.6 wire.
+	// No speaker level on the 7.x wire; the u32 statement id only for 7.7+.
 	NetworkMessage msg;
 	msg.addByte(0xAA);
+	if (version > 760) {
+		msg.add<uint32_t>(0x00);
+	}
 	msg.addString(author);
 	msg.addByte(type);
 	msg.add<uint16_t>(channel);
@@ -2092,6 +2118,11 @@ void ProtocolGame::sendCreatureSay(const Creature* creature, SpeakClasses type, 
 	NetworkMessage msg;
 	msg.addByte(0xAA);
 
+	static uint32_t statementId = 0;
+	if (version > 760) {
+		msg.add<uint32_t>(++statementId);
+	}
+
 	msg.addString(creature->getName());
 
 	msg.addByte(type);
@@ -2110,6 +2141,11 @@ void ProtocolGame::sendToChannel(const Creature* creature, SpeakClasses type, co
 {
 	NetworkMessage msg;
 	msg.addByte(0xAA);
+
+	static uint32_t statementId = 0;
+	if (version > 760) {
+		msg.add<uint32_t>(++statementId);
+	}
 
 	if (!creature) {
 		msg.addString("");
@@ -2131,6 +2167,10 @@ void ProtocolGame::sendLogMessage(const std::string& text)
 	// stay available for events that should stand out.
 	NetworkMessage msg;
 	msg.addByte(0xAA);
+	static uint32_t statementId = 0;
+	if (version > 760) {
+		msg.add<uint32_t>(++statementId);
+	}
 	msg.addString("");
 	msg.addByte(TALKTYPE_CHANNEL_O);
 	msg.add<uint16_t>(CHANNEL_LOG);
@@ -2146,6 +2186,10 @@ void ProtocolGame::sendPrivateMessageFrom(const Creature* speaker, const std::st
 
 	NetworkMessage msg;
 	msg.addByte(0xAA);
+	static uint32_t statementId = 0;
+	if (version > 760) {
+		msg.add<uint32_t>(++statementId);
+	}
 	msg.addString(speaker->getName());
 	msg.addByte(TALKTYPE_PRIVATE);
 	msg.addString(text);
@@ -2156,6 +2200,10 @@ void ProtocolGame::sendPrivateMessage(const Player* speaker, SpeakClasses type, 
 {
 	NetworkMessage msg;
 	msg.addByte(0xAA);
+	static uint32_t statementId = 0;
+	if (version > 760) {
+		msg.add<uint32_t>(++statementId);
+	}
 	if (speaker) {
 		msg.addString(speaker->getName());
 	} else {
@@ -2655,16 +2703,16 @@ void ProtocolGame::sendCombatAnalyzer(CombatType_t, int32_t, DamageAnalyzerImpac
 
 void ProtocolGame::sendOutfitWindow()
 {
-	// 7.6 outfit picker: current outfit + a first/last outfit id range,
-	// all single-byte ids.
+	// 7.x outfit picker: current outfit + a first/last outfit id range —
+	// single-byte ids for the 7.6 client, u16 for 7.7+ (see AddOutfit).
 	NetworkMessage msg;
 	msg.addByte(0xC8);
 
 	Outfit_t currentOutfit = player->getDefaultOutfit();
 	AddOutfit(msg, currentOutfit);
 
-	uint8_t firstOutfit;
-	uint8_t lastOutfit;
+	uint16_t firstOutfit;
+	uint16_t lastOutfit;
 	switch (player->getSex()) {
 		case PLAYERSEX_FEMALE: {
 			firstOutfit = 136;
@@ -2684,8 +2732,13 @@ void ProtocolGame::sendOutfitWindow()
 		}
 	}
 
-	msg.addByte(firstOutfit);
-	msg.addByte(lastOutfit);
+	if (version <= 760) {
+		msg.addByte(firstOutfit);
+		msg.addByte(lastOutfit);
+	} else {
+		msg.add<uint16_t>(firstOutfit);
+		msg.add<uint16_t>(lastOutfit);
+	}
 
 	writeToOutputBuffer(msg);
 }
@@ -2845,8 +2898,14 @@ void ProtocolGame::AddPlayerSkills(NetworkMessage& msg)
 void ProtocolGame::AddOutfit(NetworkMessage& msg, const Outfit_t& outfit)
 {
 	// The 7.6 client reads lookType as a single byte; CipSoft widened it to
-	// u16 with 7.7. No addons, no mount.
-	msg.addByte(std::min<uint16_t>(outfit.lookType, std::numeric_limits<uint8_t>::max()));
+	// u16 with 7.7 — sending the u16 to a 760 session desyncs the stream one
+	// byte per creature ("debug assertion in module Container"). No addons,
+	// no mount either way.
+	if (version <= 760) {
+		msg.addByte(std::min<uint16_t>(outfit.lookType, std::numeric_limits<uint8_t>::max()));
+	} else {
+		msg.add<uint16_t>(outfit.lookType);
+	}
 	if (outfit.lookType != 0) {
 		msg.addByte(outfit.lookHead);
 		msg.addByte(outfit.lookBody);

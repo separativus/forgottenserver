@@ -13,6 +13,7 @@
 #include "monsters.h"
 #include "outfit.h"
 #include "protocollogin.h"
+#include "rsa.h"
 #include "protocolstatus.h"
 #include "scheduler.h"
 #include "script.h"
@@ -97,6 +98,16 @@ void mainLoader(ServiceManager* services)
 	}
 #endif
 
+	// set RSA key (7.61+ clients encrypt the login packet; 7.60 is plaintext)
+	std::cout << ">> Loading RSA key" << std::endl;
+	try {
+		std::ifstream key{"key.pem"};
+		std::string pem{std::istreambuf_iterator<char>{key}, std::istreambuf_iterator<char>{}};
+		tfs::rsa::loadPEM(pem);
+	} catch (const std::exception& e) {
+		startupErrorMessage(e.what());
+		return;
+	}
 
 	std::cout << ">> Establishing database connection..." << std::flush;
 

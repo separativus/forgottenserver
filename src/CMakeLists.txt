@@ -55,6 +55,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/protocolgame.cpp
 	${CMAKE_CURRENT_LIST_DIR}/protocollogin.cpp
 	${CMAKE_CURRENT_LIST_DIR}/protocolstatus.cpp
+	${CMAKE_CURRENT_LIST_DIR}/rsa.cpp
 	${CMAKE_CURRENT_LIST_DIR}/scheduler.cpp
 	${CMAKE_CURRENT_LIST_DIR}/script.cpp
 	${CMAKE_CURRENT_LIST_DIR}/scriptmanager.cpp
@@ -73,6 +74,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/vocation.cpp
 	${CMAKE_CURRENT_LIST_DIR}/weapons.cpp
 	${CMAKE_CURRENT_LIST_DIR}/wildcardtree.cpp
+	${CMAKE_CURRENT_LIST_DIR}/xtea.cpp
 	)
 
 set(tfs_HDR
@@ -139,6 +141,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/protocol.h
 	${CMAKE_CURRENT_LIST_DIR}/protocollogin.h
 	${CMAKE_CURRENT_LIST_DIR}/protocolstatus.h
+	${CMAKE_CURRENT_LIST_DIR}/rsa.h
 	${CMAKE_CURRENT_LIST_DIR}/pugicast.h
 	${CMAKE_CURRENT_LIST_DIR}/scheduler.h
 	${CMAKE_CURRENT_LIST_DIR}/script.h
@@ -161,6 +164,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/vocation.h
 	${CMAKE_CURRENT_LIST_DIR}/weapons.h
 	${CMAKE_CURRENT_LIST_DIR}/wildcardtree.h
+	${CMAKE_CURRENT_LIST_DIR}/xtea.h
 	)
 
 set(tfs_MAIN ${CMAKE_CURRENT_LIST_DIR}/main.cpp PARENT_SCOPE)
