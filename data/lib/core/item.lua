@@ -578,7 +578,21 @@ do
 
 					response[#response + 1] = string.format(" It belongs to house '%s'. %s owns this house.", houseName, houseOwnerName)
 					if housePriceVisible and isForSale and pricePerSQM > 0 then
-						response[#response + 1] = string.format(" It costs %d gold coins.", pricePerSQM * house:getTileCount())
+						-- TibiaFun currency: quote house prices in crystal coins; the rate
+						-- comes from the crystal coin's items.xml "worth" attribute.
+						local priceGold = pricePerSQM * house:getTileCount()
+						local crystalWorth = ItemType(ITEM_CRYSTAL_COIN):getWorth()
+						if crystalWorth and crystalWorth > 0 then
+							local amount = priceGold / crystalWorth
+							if amount % 1 == 0 then
+								amount = string.format("%d", amount)
+							else
+								amount = string.format("%g", amount)
+							end
+							response[#response + 1] = string.format(" It costs %s crystal coin%s.", amount, amount ~= "1" and "s" or "")
+						else
+							response[#response + 1] = string.format(" It costs %d gold coins.", priceGold)
+						end
 					end
 				end
 			end

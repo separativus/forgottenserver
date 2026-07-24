@@ -866,7 +866,12 @@ BlockType_t Creature::blockHit(Creature* attacker, CombatType_t combatType, int3
 
 		if (checkDefense && hasDefense && canUseDefense) {
 			int32_t defense = getDefense();
-			damage -= uniform_random(defense / 2, defense);
+			// TibiaFun (tf.com.pl game.cpp onAttack, YUR_CVS_MODS): defense is
+			// an all-or-nothing block with chance ~ defense/(10*damage);
+			// a non-block removes nothing.
+			if (uniform_random(0, 9999) * damage < defense * 1000) {
+				damage = 0;
+			}
 			if (damage <= 0) {
 				damage = 0;
 				blockType = BLOCK_DEFENSE;
@@ -876,10 +881,11 @@ BlockType_t Creature::blockHit(Creature* attacker, CombatType_t combatType, int3
 
 		if (checkArmor) {
 			int32_t armor = getArmor();
-			if (armor > 3) {
-				damage -= uniform_random(armor / 2, armor - (armor % 2 + 1));
-			} else if (armor > 0) {
-				--damage;
+			// TibiaFun armor scales with the hit:
+			//   damage -= damage*(armor/100)*rand01 + armor
+			if (armor > 0) {
+				damage -=
+				    static_cast<int32_t>(damage * (armor / 100.0) * (uniform_random(0, 9999) / 10000.0)) + armor;
 			}
 
 			if (damage <= 0) {

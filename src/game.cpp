@@ -809,6 +809,42 @@ ReturnValue Game::internalMoveCreature(Creature* creature, Direction direction, 
 					flags |= FLAG_IGNOREBLOCKITEM | FLAG_IGNOREBLOCKCREATURE;
 					player->setDirection(direction);
 					destPos.z++;
+				} else if (tmpTile && !tmpTile->hasFlag(TILESTATE_IMMOVABLEBLOCKSOLID) &&
+				           tmpTile->hasFlag(TILESTATE_FLOORCHANGE_NORTH | TILESTATE_FLOORCHANGE_SOUTH |
+				                            TILESTATE_FLOORCHANGE_EAST | TILESTATE_FLOORCHANGE_WEST)) {
+					// Legacy 7.6 engine (game.cpp thingMoveInternal "change level"):
+					// walking into a tile-less position whose tile below carries
+					// directional stairs drops the player at the foot of those stairs.
+					// TFS only descends onto hasHeight(3) ledges, which strands players
+					// on upper floors of legacy maps (they have no floorchange-down
+					// items at the edge, e.g. the TibiaFun depot first floor).
+					const bool n = tmpTile->hasFlag(TILESTATE_FLOORCHANGE_NORTH);
+					const bool s = tmpTile->hasFlag(TILESTATE_FLOORCHANGE_SOUTH);
+					const bool e = tmpTile->hasFlag(TILESTATE_FLOORCHANGE_EAST);
+					const bool w = tmpTile->hasFlag(TILESTATE_FLOORCHANGE_WEST);
+					flags |= FLAG_IGNOREBLOCKITEM | FLAG_IGNOREBLOCKCREATURE;
+					player->setDirection(direction);
+					if (n && e) {
+						destPos = Position(currentPos.x - 2, currentPos.y + 2, currentPos.z + 1);
+					} else if (n && w) {
+						destPos = Position(currentPos.x + 2, currentPos.y + 2, currentPos.z + 1);
+					} else if (s && e) {
+						destPos = Position(currentPos.x - 2, currentPos.y - 2, currentPos.z + 1);
+					} else if (s && w) {
+						destPos = Position(currentPos.x + 2, currentPos.y - 2, currentPos.z + 1);
+					} else if (n) {
+						destPos.y++;
+						destPos.z++;
+					} else if (s) {
+						destPos.y--;
+						destPos.z++;
+					} else if (e) {
+						destPos.x--;
+						destPos.z++;
+					} else {
+						destPos.x++;
+						destPos.z++;
+					}
 				}
 			}
 		}

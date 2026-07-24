@@ -365,34 +365,31 @@ void Player::getShieldAndWeapon(const Item*& shield, const Item*& weapon) const
 
 int32_t Player::getDefense() const
 {
-	int32_t defenseSkill = getSkillLevel(SKILL_FIST);
-	int32_t defenseValue = 7;
+	// TibiaFun (tf.com.pl player.cpp getDefense): a shield hand adds
+	// shielding skill + item defense, the other hand its item defense;
+	// + rand(0..shielding); fight mode scales x1.0/1.5/2.0 (defensive
+	// doubles); the result is randomized once more.
 	const Item* weapon;
 	const Item* shield;
 	getShieldAndWeapon(shield, weapon);
 
+	int32_t defense = 0;
 	if (weapon) {
-		defenseValue = weapon->getDefense() + weapon->getExtraDefense();
-		defenseSkill = getWeaponSkill(weapon);
+		defense += weapon->getDefense() + weapon->getExtraDefense();
 	}
-
 	if (shield) {
-		defenseValue = weapon ? shield->getDefense() + weapon->getExtraDefense() : shield->getDefense();
-		defenseSkill = getSkillLevel(SKILL_SHIELD);
+		defense += getSkillLevel(SKILL_SHIELD) + shield->getDefense();
+	}
+	defense += uniform_random(0, getSkillLevel(SKILL_SHIELD));
+
+	if (fightMode == FIGHTMODE_BALANCED) {
+		defense = static_cast<int32_t>(defense * 1.5);
+	} else if (fightMode == FIGHTMODE_DEFENSE) {
+		defense *= 2;
 	}
 
-	if (defenseSkill == 0) {
-		switch (fightMode) {
-			case FIGHTMODE_ATTACK:
-			case FIGHTMODE_BALANCED:
-				return 1;
-
-			case FIGHTMODE_DEFENSE:
-				return 2;
-		}
-	}
-
-	return (defenseSkill / 4. + 2.23) * defenseValue * 0.15 * getDefenseFactor() * vocation->defenseMultiplier;
+	return uniform_random(static_cast<int32_t>(defense * 0.15),
+	                      1 + static_cast<int32_t>(defense * (uniform_random(0, 9999) / 10000.0)));
 }
 
 uint32_t Player::getAttackSpeed() const
@@ -2008,6 +2005,17 @@ BlockType_t Player::blockHit(Creature* attacker, CombatType_t combatType, int32_
 
 	if (blockType != BLOCK_NONE) {
 		return blockType;
+	}
+
+	// TibiaFun blessing (tf.com.pl game.cpp applyAmulets): any blessing
+	// absorbs 8% of incoming physical damage, with the original message.
+	if (combatType == COMBAT_PHYSICALDAMAGE && damage > 0 && blessings.any()) {
+		int32_t reduced = static_cast<int32_t>(std::ceil(damage * 92 / 100.));
+		if (reduced < damage) {
+			sendTextMessage(MESSAGE_EVENT_ADVANCE, "The Gods safe you before " + std::to_string(damage - reduced) +
+			                                           " hitpoints from " + std::to_string(damage) + ".");
+			damage = reduced;
+		}
 	}
 
 	if (damage <= 0) {
@@ -3675,6 +3683,7 @@ void Player::onAttackedCreature(Creature* target, bool addFightTicks /* = true *
 		}
 
 		targetPlayer->addInFightTicks();
+		targetPlayer->lastPvpFight = OTSYS_TIME();
 
 		if (getSkull() == SKULL_NONE && getSkullClient(targetPlayer) == SKULL_YELLOW) {
 			addAttacked(targetPlayer);
@@ -3699,6 +3708,12 @@ void Player::onAttackedCreature(Creature* target, bool addFightTicks /* = true *
 		}
 	}
 
+	if (targetPlayer) {
+		lastPvpFight = OTSYS_TIME();
+	} else {
+		lastMonsterFight = OTSYS_TIME();
+	}
+
 	if (addFightTicks) {
 		addInFightTicks();
 	}
@@ -3708,6 +3723,7 @@ void Player::onAttacked()
 {
 	Creature::onAttacked();
 
+	lastMonsterFight = OTSYS_TIME();
 	addInFightTicks();
 }
 

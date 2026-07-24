@@ -479,6 +479,10 @@ public:
 	float getDefenseFactor() const override;
 
 	void addInFightTicks(bool pzlock = false);
+	// TibiaFun #15: what the player last fought decides how long the
+	// logout gate keeps them (see ProtocolGame::logout).
+	int64_t getLastMonsterFight() const { return lastMonsterFight; }
+	int64_t getLastPvpFight() const { return lastPvpFight; }
 
 	uint64_t getGainedExperience(Creature* attacker) const override;
 
@@ -1276,6 +1280,8 @@ private:
 	bool wasMounted = false;
 	bool ghostMode = false;
 	bool pzLocked = false;
+	int64_t lastMonsterFight = 0;
+	int64_t lastPvpFight = 0;
 	bool isConnecting = false;
 	bool addAttackSkillPoint = false;
 	bool inventoryAbilities[CONST_SLOT_LAST + 1] = {};

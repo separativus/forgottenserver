@@ -281,8 +281,21 @@ void ProtocolGame::logout(bool displayEffect, bool forced)
 				}
 
 				if (!player->getTile()->hasFlag(TILESTATE_PROTECTIONZONE) && player->hasCondition(CONDITION_INFIGHT)) {
-					player->sendCancelMessage(RETURNVALUE_YOUMAYNOTLOGOUTDURINGAFIGHT);
-					return;
+					// TibiaFun #15: scale the logout block with what was fought.
+					// Monsters lock briefly (pzLockedMonster), players for the full
+					// pzLocked window, and an aggressor (pzLocked flag) for
+					// pzLockedAggressor. CONDITION_INFIGHT keeps its vanilla duration
+					// so skull/icon mechanics stay untouched.
+					int64_t now = OTSYS_TIME();
+					bool monsterWindow =
+					    now - player->getLastMonsterFight() < getNumber(ConfigManager::PZ_LOCKED_MONSTER);
+					bool pvpWindow = now - player->getLastPvpFight() <
+					                 getNumber(player->isPzLocked() ? ConfigManager::PZ_LOCKED_AGGRESSOR
+					                                                : ConfigManager::PZ_LOCKED);
+					if (monsterWindow || pvpWindow) {
+						player->sendCancelMessage(RETURNVALUE_YOUMAYNOTLOGOUTDURINGAFIGHT);
+						return;
+					}
 				}
 			}
 
