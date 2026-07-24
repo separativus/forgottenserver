@@ -31,6 +31,35 @@ Account IOLoginData::loadAccount(uint32_t accno)
 	return account;
 }
 
+uint32_t IOLoginData::gameworldAuthentication(uint32_t accountNumber, const std::string& password,
+                                              const std::string& characterName, uint32_t& characterId)
+{
+	Database& db = Database::getInstance();
+
+	DBResult_ptr result = db.storeQuery(
+	    fmt::format("SELECT `id`, UNHEX(`password`) AS `password` FROM `accounts` WHERE `name` = {:s}",
+	                db.escapeString(std::to_string(accountNumber))));
+	if (!result) {
+		return 0;
+	}
+
+	if (transformToSHA1(password) != result->getString("password")) {
+		return 0;
+	}
+
+	uint32_t accountId = result->getNumber<uint32_t>("id");
+
+	result = db.storeQuery(
+	    fmt::format("SELECT `id` FROM `players` WHERE `name` = {:s} AND `account_id` = {:d} AND `deletion` = 0",
+	                db.escapeString(characterName), accountId));
+	if (!result) {
+		return 0;
+	}
+
+	characterId = result->getNumber<uint32_t>("id");
+	return accountId;
+}
+
 uint32_t IOLoginData::getAccountIdByPlayerName(const std::string& playerName)
 {
 	Database& db = Database::getInstance();

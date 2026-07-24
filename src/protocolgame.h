@@ -16,14 +16,6 @@ class Player;
 class ProtocolGame;
 class Tile;
 
-enum SessionEndTypes_t : uint8_t
-{
-	SESSION_END_LOGOUT = 0,
-	SESSION_END_UNKNOWN = 1, // unknown, no difference from logout
-	SESSION_END_FORCECLOSE = 2,
-	SESSION_END_UNKNOWN2 = 3, // unknown, no difference from logout
-};
-
 using ProtocolGame_ptr = std::shared_ptr<ProtocolGame>;
 
 extern Game g_game;
@@ -58,7 +50,7 @@ public:
 	}; // Not required as we send first
 	enum
 	{
-		use_checksum = true
+		use_checksum = false
 	};
 	static const char* protocol_name() { return "gameworld protocol"; }
 
@@ -86,7 +78,6 @@ private:
 	// we have all the parse methods
 	void parsePacket(NetworkMessage& msg) override;
 	void onRecvFirstMessage(NetworkMessage& msg) override;
-	void onConnect() override;
 
 	// Parse methods
 	void parseAutoWalk(NetworkMessage& msg);
@@ -276,7 +267,6 @@ private:
 	void sendModalWindow(const ModalWindow& modalWindow);
 
 	// session end
-	void sendSessionEnd(SessionEndTypes_t reason);
 
 	// Help functions
 
@@ -319,10 +309,7 @@ private:
 	Player* player = nullptr;
 
 	uint32_t eventConnect = 0;
-	uint32_t challengeTimestamp = 0;
 	uint16_t version = CLIENT_VERSION_MIN;
-
-	uint8_t challengeRandom = 0;
 
 	bool debugAssertSent = false;
 	bool acceptPackets = false;
