@@ -16,8 +16,22 @@ uint32_t Npc::npcAutoID = 0x20000000;
 
 namespace Npcs {
 bool loaded = false;
-std::shared_ptr<NpcScriptInterface> scriptInterface = std::make_shared<NpcScriptInterface>();
+// Constructed lazily (first use is Npcs::load): building a LuaScriptInterface
+// during static initialization spins up the shared Lua state before
+// g_luaEnvironment's own constructor has run; the constructor then resets its
+// state pointer and creates a second lua_State, leaving the npc interface on
+// an orphaned state. Registry refs (addEvent callbacks, event tables) then
+// cross states and corrupt each other's registries at runtime.
+std::shared_ptr<NpcScriptInterface> scriptInterface;
 std::map<const std::string, NpcType*> npcTypes;
+
+std::shared_ptr<NpcScriptInterface>& getScriptInterfaceShared()
+{
+	if (!scriptInterface) {
+		scriptInterface = std::make_shared<NpcScriptInterface>();
+	}
+	return scriptInterface;
+}
 
 void load(bool reload /*= false*/)
 {
@@ -25,7 +39,7 @@ void load(bool reload /*= false*/)
 		return;
 	}
 
-	if (!scriptInterface->loadNpcLib("data/npc/lib/npc.lua")) {
+	if (!getScriptInterfaceShared()->loadNpcLib("data/npc/lib/npc.lua")) {
 		std::cout << "[Warning - NpcLib::NpcLib] Can not load lib: data/npc/lib/npc.lua" << std::endl;
 		std::cout << scriptInterface->getLastLuaError() << std::endl;
 		return;
@@ -74,7 +88,7 @@ NpcType* getNpcType(std::string name)
 	return it != npcTypes.end() ? it->second : nullptr;
 }
 
-NpcScriptInterface* getScriptInterface() { return scriptInterface.get(); }
+NpcScriptInterface* getScriptInterface() { return getScriptInterfaceShared().get(); }
 } // namespace Npcs
 
 Npc* Npc::createNpc(const std::string& name)
@@ -1183,7 +1197,8 @@ int NpcScriptInterface::luaNpcCloseShopWindow(lua_State* L)
 	return 1;
 }
 
-NpcEventsHandler::NpcEventsHandler(const std::string& file, Npc* npc) : scriptInterface(Npcs::scriptInterface), npc(npc)
+NpcEventsHandler::NpcEventsHandler(const std::string& file, Npc* npc) :
+    scriptInterface(Npcs::getScriptInterfaceShared()), npc(npc)
 {
 	loaded = scriptInterface->loadFile("data/npc/scripts/" + file, npc) == 0;
 	if (!loaded) {
@@ -1200,7 +1215,7 @@ NpcEventsHandler::NpcEventsHandler(const std::string& file, Npc* npc) : scriptIn
 	}
 }
 
-NpcEventsHandler::NpcEventsHandler() : scriptInterface(Npcs::scriptInterface) {}
+NpcEventsHandler::NpcEventsHandler() : scriptInterface(Npcs::getScriptInterfaceShared()) {}
 
 NpcEventsHandler::~NpcEventsHandler()
 {
