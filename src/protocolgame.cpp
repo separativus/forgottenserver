@@ -823,7 +823,13 @@ void ProtocolGame::checkCreatureAsKnown(uint32_t id, bool& known, uint32_t& remo
 
 	known = false;
 
-	if (knownCreatureSet.size() > 1300) {
+	// The 7.x client keeps a fixed table of 150 known creatures (1300 is the
+	// 8.x client's). Walking past the 151st creature without evicting one
+	// overflows that table and the stomped entry is drawn with a zeroed
+	// outfit: item id 0, i.e. "Debug Assertion ... module Container ...
+	// Parameter: -100". Both the legacy engine (protocol76.cpp) and Nekiro's
+	// 1.5 downgrade evict beyond 150.
+	if (knownCreatureSet.size() > 150) {
 		// Look for a creature to remove
 		for (auto it = knownCreatureSet.begin(), end = knownCreatureSet.end(); it != end; ++it) {
 			Creature* creature = g_game.getCreatureByID(*it);
@@ -1542,13 +1548,13 @@ void ProtocolGame::sendAddMarker(const Position& pos, uint8_t markType, const st
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendReLoginWindow(uint8_t unfairFightReduction)
+void ProtocolGame::sendReLoginWindow(uint8_t)
 {
-	NetworkMessage msg;
-	msg.addByte(0x28);
-	msg.addByte(0x00);
-	msg.addByte(unfairFightReduction);
-	writeToOutputBuffer(msg);
+	// 0x28 (the relogin window) is an 8.x+ opcode; to a 7.x client it is an
+	// unknown packet type and the session dies right on death. The legacy
+	// engine sent MSG_ADVANCE "You are dead." here (game.cpp) and let the
+	// client handle its own death dialog, so that is what goes out.
+	sendTextMessage(TextMessage(MESSAGE_EVENT_ADVANCE, "You are dead."));
 }
 
 void ProtocolGame::sendStats()
