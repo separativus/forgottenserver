@@ -1619,10 +1619,17 @@ void ProtocolGame::sendChannelMessage(const std::string& author, const std::stri
 
 void ProtocolGame::sendIcons(uint32_t icons)
 {
-	// The 7.6 client reads the condition icons as a single byte.
+	// The 7.6 client reads the condition icons as a single byte and only the
+	// low eight TFS icons exist there (poison..swords). Later icons are
+	// dropped, except the pz-lock red swords, which the old client showed as
+	// the plain fight swords. (Clamping instead of masking used to turn
+	// ICON_PIGEON into 0xFF — every emblem lit up inside protection zones.)
+	if (icons & ICON_REDSWORDS) {
+		icons |= ICON_SWORDS;
+	}
 	NetworkMessage msg;
 	msg.addByte(0xA2);
-	msg.addByte(static_cast<uint8_t>(std::min<uint32_t>(icons, std::numeric_limits<uint8_t>::max())));
+	msg.addByte(static_cast<uint8_t>(icons));
 	writeToOutputBuffer(msg);
 }
 

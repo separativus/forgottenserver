@@ -73,9 +73,11 @@ function onSay(player, words, param)
 		return false
 	end
 
-	-- need to clear EventCallback.data or we end up having duplicated events on /reload scripts
+	-- need to clear the registered event callbacks or we end up having
+	-- duplicated events on /reload scripts (clear lives on Event, not on the
+	-- EventCallback compatibility instance)
 	if table.contains({RELOAD_TYPE_SCRIPTS, RELOAD_TYPE_ALL}, reloadType) then
-		EventCallback:clear()
+		Event:clear()
 	end
 
 	Game.reload(reloadType)

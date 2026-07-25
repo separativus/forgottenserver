@@ -21,12 +21,12 @@ Raid = setmetatable({
 		end
 
 		function obj:addEvent(delay, fn)
-			events[#events] = { delay = delay, fn = fn }
+			events[#events + 1] = { delay = delay, fn = fn }
 		end
 
 		function obj:execute()
 			for _, event in ipairs(events) do
-				addEvent(event.delay, event.fn)
+				addEvent(event.fn, event.delay)
 			end
 		end
 
