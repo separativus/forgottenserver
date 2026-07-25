@@ -464,10 +464,13 @@ void Npc::doSay(const std::string& text) { g_game.internalCreatureSay(this, TALK
 void Npc::doSayToPlayer(Player* player, const std::string& text)
 {
 	if (player) {
-		// TibiaFun: npc dialogue lives in the npc conversation channel, which
-		// openChannel() has opened for this player. Unlike a private chat
-		// window, that channel has an id the server can close again when the
-		// conversation ends.
+		// TibiaFun: npc dialogue lives in the npc conversation channel. Unlike a
+		// private chat window it has an id the server can close again — and,
+		// because every line makes sure the tab is there, a player who closed
+		// it gets it back with the npc's next word.
+		if (player->getNpcChannelOwner() != getID()) {
+			openChannel(player);
+		}
 		player->sendChannelMessage(getName(), text, TALKTYPE_CHANNEL_Y, CHANNEL_NPC);
 		player->onCreatureSay(this, TALKTYPE_PRIVATE, text);
 	}
@@ -480,12 +483,14 @@ void Npc::openChannel(Player* player)
 		// another npc must not reuse the previous label.
 		player->sendClosePrivate(CHANNEL_NPC);
 		player->sendChannel(CHANNEL_NPC, getName(), nullptr, nullptr);
+		player->setNpcChannelOwner(getID());
 	}
 }
 
 void Npc::closeChannel(Player* player)
 {
 	if (player) {
+		player->setNpcChannelOwner(0);
 		player->sendClosePrivate(CHANNEL_NPC);
 	}
 }
@@ -725,7 +730,6 @@ void NpcScriptInterface::registerFunctions()
 	tfs::lua::registerMethod(L, "Npc", "setFocus", NpcScriptInterface::luaNpcSetFocus);
 	tfs::lua::registerMethod(L, "Npc", "sayTo", NpcScriptInterface::luaNpcSayTo);
 	tfs::lua::registerMethod(L, "Npc", "openPrivateChannel", NpcScriptInterface::luaNpcOpenPrivateChannel);
-	tfs::lua::registerMethod(L, "Npc", "openChannel", NpcScriptInterface::luaNpcOpenChannel);
 	tfs::lua::registerMethod(L, "Npc", "closeChannel", NpcScriptInterface::luaNpcCloseChannel);
 
 	tfs::lua::registerMethod(L, "Npc", "openShopWindow", NpcScriptInterface::luaNpcOpenShopWindow);
@@ -1110,18 +1114,6 @@ int NpcScriptInterface::luaNpcOpenPrivateChannel(lua_State* L)
 	Player* target = tfs::lua::getPlayer(L, 2);
 	if (npc && target) {
 		target->sendOpenPrivateChannel(npc->getName());
-	}
-	return 0;
-}
-
-int NpcScriptInterface::luaNpcOpenChannel(lua_State* L)
-{
-	// npc:openChannel(player) — open the npc conversation channel, labelled
-	// with this npc's name, ahead of the delayed reply.
-	Npc* npc = tfs::lua::getUserdata<Npc>(L, 1);
-	Player* target = tfs::lua::getPlayer(L, 2);
-	if (npc && target) {
-		npc->openChannel(target);
 	}
 	return 0;
 }

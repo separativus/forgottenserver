@@ -2034,6 +2034,13 @@ void Game::playerCloseChannel(uint32_t playerId, uint16_t channelId)
 		return;
 	}
 
+	if (channelId == CHANNEL_NPC) {
+		// No g_chat channel behind the npc tab, so there is no membership to
+		// drop — just remember it is gone; the npc's next line reopens it.
+		player->setNpcChannelOwner(0);
+		return;
+	}
+
 	g_chat->removeUserFromChannel(*player, channelId);
 }
 
@@ -3608,6 +3615,9 @@ void Game::playerSay(uint32_t playerId, uint16_t channelId, SpeakClasses type, c
 			// TibiaFun: the npc conversation channel has no g_chat channel behind
 			// it — what the player types there reaches the npcs in view only.
 			if (channelId == CHANNEL_NPC) {
+				// echo the player's own line into the tab: nothing else does,
+				// since the channel has no g_chat member list to talk to
+				player->sendChannelMessage(player->getName(), text, TALKTYPE_CHANNEL_Y, CHANNEL_NPC);
 				playerSpeakToNpc(player, text);
 			} else {
 				g_chat->talkToChannel(*player, type, text, channelId);

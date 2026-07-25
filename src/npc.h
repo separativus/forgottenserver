@@ -38,7 +38,6 @@ private:
 	static int luaNpcSetFocus(lua_State* L);
 	static int luaNpcSayTo(lua_State* L);
 	static int luaNpcOpenPrivateChannel(lua_State* L);
-	static int luaNpcOpenChannel(lua_State* L);
 	static int luaNpcCloseChannel(lua_State* L);
 
 	static int luaNpcOpenShopWindow(lua_State* L);
