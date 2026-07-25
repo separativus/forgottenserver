@@ -7,7 +7,9 @@ function onSay(player, words, param)
 		return false
 	end
 
+	-- legacy /s: the npc lands on the tile in front of the gamemaster
 	local position = player:getPosition()
+	position:getNextPosition(player:getDirection())
 	local npc = Game.createNpc(param, position)
 	if npc then
 		npc:setMasterPos(position)

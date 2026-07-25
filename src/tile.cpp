@@ -497,7 +497,14 @@ ReturnValue Tile::queryAdd(int32_t, const Thing& thing, uint32_t, uint32_t flags
 		}
 
 		if (const Monster* monster = creature->getMonster()) {
-			if (hasFlag(TILESTATE_PROTECTIONZONE | TILESTATE_FLOORCHANGE | TILESTATE_TELEPORT)) {
+			if (hasFlag(TILESTATE_FLOORCHANGE | TILESTATE_TELEPORT)) {
+				return RETURNVALUE_NOTPOSSIBLE;
+			}
+
+			// Direct placements (Map::placeCreature's exact-position probe, /m)
+			// pass FLAG_IGNOREBLOCKITEM and may target a protection zone — the
+			// legacy engine only kept monsters from *walking* into one.
+			if (hasFlag(TILESTATE_PROTECTIONZONE) && !hasBitSet(FLAG_IGNOREBLOCKITEM, flags)) {
 				return RETURNVALUE_NOTPOSSIBLE;
 			}
 

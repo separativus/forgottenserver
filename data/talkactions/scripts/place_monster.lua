@@ -7,7 +7,9 @@ function onSay(player, words, param)
 		return false
 	end
 
+	-- legacy /m: the monster lands on the tile in front of the gamemaster
 	local position = player:getPosition()
+	position:getNextPosition(player:getDirection())
 	local monster = Game.createMonster(param, position)
 	if monster then
 		monster:getPosition():sendMagicEffect(CONST_ME_TELEPORT)
