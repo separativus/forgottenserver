@@ -1,3 +1,6 @@
+# Upstream workflow, kept for parity with master. The 7.60 branch has its own
+# pipeline (ci-760.yml) on self-hosted runners, so the trigger is pinned to the
+# upstream-tracking branches instead of firing on every branch and pull request.
 name: Build with vcpkg
 
 on:
@@ -15,6 +18,10 @@ on:
       - vcpkg.json
 
   pull_request:
+    branches:
+      - master
+      - v*
+
     paths:
       - .github/workflows/build-vcpkg.yml
       - cmake/**

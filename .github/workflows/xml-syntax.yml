@@ -1,7 +1,14 @@
+# Upstream workflow, kept for parity with master. The 7.60 branch has its own
+# pipeline (ci-760.yml) on self-hosted runners, so the trigger is pinned to the
+# upstream-tracking branches instead of firing on every branch and pull request.
 name: XML syntax check
 
 on:
   pull_request:
+    branches:
+      - master
+      - v*
+
     paths:
       - data/**.xml
   push:

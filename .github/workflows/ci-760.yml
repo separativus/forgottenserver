@@ -1,0 +1,142 @@
+name: CI (7.60)
+
+on:
+  push:
+    branches: ['7.60']
+  pull_request:
+    branches: ['7.60']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+# ---------------------------------------------------------------------------
+# The 7.60 branch is the engine that separativus/tibiafun-tfs-migration ships,
+# so CI compiles it the way that repository's Dockerfiles/server does — debian
+# bookworm, LuaJIT, HTTP off (the HTTP login service is 13.x-only) — rather
+# than through the upstream vcpkg preset. The inherited upstream workflows are
+# filtered to master/v* so they no longer fire on this branch.
+#
+# Jobs run on the self-hosted pool on the migration host (label `tfs`, 2
+# runners, provisioned by scripts/install-github-runners.sh in that repo).
+# This repository is public: every job refuses to run for a pull request from
+# a fork, because a self-hosted runner must never execute code that is not
+# already in this repository.
+# ---------------------------------------------------------------------------
+
+env:
+  BUILDER_IMAGE: tfs-bookworm-build
+
+jobs:
+  build:
+    name: Build (bookworm / LuaJIT)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, tfs]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Builder image
+        # Same package set as Dockerfiles/server in the migration repo. Docker
+        # caches the layer, so this is only a real apt run when it changes.
+        run: |
+          docker build -q -t "$BUILDER_IMAGE" - <<'DOCKERFILE'
+          FROM debian:bookworm-slim
+          RUN apt-get update && apt-get install -y --no-install-recommends \
+                cmake build-essential git ca-certificates \
+                libluajit-5.1-dev libmariadb-dev libmariadb-dev-compat \
+                libboost-system-dev libboost-iostreams-dev libboost-locale-dev \
+                libpugixml-dev libssl-dev libfmt-dev \
+           && rm -rf /var/lib/apt/lists/*
+          DOCKERFILE
+
+      - name: Compile
+        # CMakeLists defaults ENABLE_UNITY_BUILD to ON: 77 sources collapse to
+        # ten translation units and a cold build takes ~20 s here, so there is
+        # nothing to gain from carrying a compiler cache across runs.
+        run: |
+          docker run --rm -u "$(id -u)" -v "$PWD:/src" -w /src "$BUILDER_IMAGE" \
+            sh -c 'cmake -S . -B build-ci -DHTTP=OFF -DUSE_LUAJIT=ON &&
+                   cmake --build build-ci -j"$(nproc)"'
+
+      - name: Binary is there
+        run: |
+          test -x build-ci/tfs
+          ls -lh build-ci/tfs
+
+  lua:
+    name: Lua syntax
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, tfs]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: LuaJIT parses every script
+        # LuaJIT, not luac: it is the runtime this engine is built against.
+        # -i is load-bearing — without it docker never attaches stdin and the
+        # container would run an empty script and pass silently.
+        run: |
+          docker run --rm -i -v "$PWD:/w" -w /w alpine:3.19 sh -s <<'EOF'
+          apk add --no-cache luajit >/dev/null 2>&1 || { echo "no luajit" >&2; exit 3; }
+          # Read the list line by line: data/npc/scripts has file names with
+          # spaces in them ("The Oracle.lua"), which word splitting would tear
+          # into two nonexistent paths.
+          { find data -name '*.lua'; echo config.lua.dist; } > /tmp/lua-files
+          rc=0
+          count=0
+          while IFS= read -r f; do
+            count=$((count + 1))
+            if ! err=$(luajit -bg "$f" /dev/null 2>&1); then
+              echo "FAIL $f"
+              echo "$err"
+              rc=1
+            fi
+          done < /tmp/lua-files
+          [ "$rc" -eq 0 ] && echo "OK: all $count file(s) parse"
+          exit $rc
+          EOF
+
+  xml:
+    name: XML well-formedness
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, tfs]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Every data XML parses
+        run: |
+          python3 - <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          files = sorted(Path("data").rglob("*.xml"))
+          bad = []
+          for path in files:
+              try:
+                  ET.parse(path)
+              except ET.ParseError as exc:
+                  bad.append(f"{path}: {exc}")
+          print(f"parsed {len(files)} files")
+          if bad:
+              sys.exit("\n".join(bad))
+          PY
+
+  ci:
+    name: CI gate
+    if: always()
+    needs: [build, lua, xml]
+    runs-on: [self-hosted, tfs]
+    timeout-minutes: 2
+    steps:
+      - name: Verdict
+        run: |
+          echo '${{ toJSON(needs) }}'
+          if ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}; then
+            exit 1
+          fi
