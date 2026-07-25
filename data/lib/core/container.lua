@@ -73,7 +73,9 @@ function Container:getContentDescription()
 	if items and #items > 0 then
 		local loot = {}
 		for i = 1, #items do
-			loot[#loot + 1] = string.format("{%d|%s}", items[i]:getType():getClientId(), items[i]:getNameDescription(items[i]:getSubType(), true))
+			-- 7.x clients have no item-link markup ({clientId|name} is Tibia 11+);
+			-- they would render the braces literally in the loot message.
+			loot[#loot + 1] = items[i]:getNameDescription(items[i]:getSubType(), true)
 		end
 
 		return table.concat(loot, ", ")
