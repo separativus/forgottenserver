@@ -395,6 +395,17 @@ void Npc::onCreatureMove(Creature* creature, const Tile* newTile, const Position
 			npcEventHandler->onCreatureMove(creature, oldPos, newPos);
 		}
 	}
+
+	// A player who leaves our view has left the conversation: the jiddo handler
+	// only notices players who walk out of talkRadius while still in sight (it
+	// checks from onThink, which stops once we idle), so focus used to stick
+	// forever — the npc would not greet that player again on their return.
+	if (Player* player = creature->getPlayer(); player && creature != this) {
+		bool couldSee = canSee(oldPos);
+		if (couldSee && !canSee(newPos) && npcEventHandler) {
+			npcEventHandler->onCreatureDisappear(creature);
+		}
+	}
 }
 
 void Npc::onCreatureSay(Creature* creature, SpeakClasses type, const std::string& text)
@@ -453,8 +464,29 @@ void Npc::doSay(const std::string& text) { g_game.internalCreatureSay(this, TALK
 void Npc::doSayToPlayer(Player* player, const std::string& text)
 {
 	if (player) {
-		player->sendPrivateMessageFrom(this, text);
+		// TibiaFun: npc dialogue lives in the npc conversation channel, which
+		// openChannel() has opened for this player. Unlike a private chat
+		// window, that channel has an id the server can close again when the
+		// conversation ends.
+		player->sendChannelMessage(getName(), text, TALKTYPE_CHANNEL_Y, CHANNEL_NPC);
 		player->onCreatureSay(this, TALKTYPE_PRIVATE, text);
+	}
+}
+
+void Npc::openChannel(Player* player)
+{
+	if (player) {
+		// close first: the tab carries this npc's name, so a conversation with
+		// another npc must not reuse the previous label.
+		player->sendClosePrivate(CHANNEL_NPC);
+		player->sendChannel(CHANNEL_NPC, getName(), nullptr, nullptr);
+	}
+}
+
+void Npc::closeChannel(Player* player)
+{
+	if (player) {
+		player->sendClosePrivate(CHANNEL_NPC);
 	}
 }
 
@@ -693,6 +725,8 @@ void NpcScriptInterface::registerFunctions()
 	tfs::lua::registerMethod(L, "Npc", "setFocus", NpcScriptInterface::luaNpcSetFocus);
 	tfs::lua::registerMethod(L, "Npc", "sayTo", NpcScriptInterface::luaNpcSayTo);
 	tfs::lua::registerMethod(L, "Npc", "openPrivateChannel", NpcScriptInterface::luaNpcOpenPrivateChannel);
+	tfs::lua::registerMethod(L, "Npc", "openChannel", NpcScriptInterface::luaNpcOpenChannel);
+	tfs::lua::registerMethod(L, "Npc", "closeChannel", NpcScriptInterface::luaNpcCloseChannel);
 
 	tfs::lua::registerMethod(L, "Npc", "openShopWindow", NpcScriptInterface::luaNpcOpenShopWindow);
 	tfs::lua::registerMethod(L, "Npc", "closeShopWindow", NpcScriptInterface::luaNpcCloseShopWindow);
@@ -1076,6 +1110,29 @@ int NpcScriptInterface::luaNpcOpenPrivateChannel(lua_State* L)
 	Player* target = tfs::lua::getPlayer(L, 2);
 	if (npc && target) {
 		target->sendOpenPrivateChannel(npc->getName());
+	}
+	return 0;
+}
+
+int NpcScriptInterface::luaNpcOpenChannel(lua_State* L)
+{
+	// npc:openChannel(player) — open the npc conversation channel, labelled
+	// with this npc's name, ahead of the delayed reply.
+	Npc* npc = tfs::lua::getUserdata<Npc>(L, 1);
+	Player* target = tfs::lua::getPlayer(L, 2);
+	if (npc && target) {
+		npc->openChannel(target);
+	}
+	return 0;
+}
+
+int NpcScriptInterface::luaNpcCloseChannel(lua_State* L)
+{
+	// npc:closeChannel(player) — the conversation is over, drop the tab.
+	Npc* npc = tfs::lua::getUserdata<Npc>(L, 1);
+	Player* target = tfs::lua::getPlayer(L, 2);
+	if (npc && target) {
+		npc->closeChannel(target);
 	}
 	return 0;
 }

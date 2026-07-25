@@ -3605,7 +3605,13 @@ void Game::playerSay(uint32_t playerId, uint16_t channelId, SpeakClasses type, c
 		case TALKTYPE_CHANNEL_Y:
 		case TALKTYPE_CHANNEL_R1:
 		case TALKTYPE_CHANNEL_R2:
-			g_chat->talkToChannel(*player, type, text, channelId);
+			// TibiaFun: the npc conversation channel has no g_chat channel behind
+			// it — what the player types there reaches the npcs in view only.
+			if (channelId == CHANNEL_NPC) {
+				playerSpeakToNpc(player, text);
+			} else {
+				g_chat->talkToChannel(*player, type, text, channelId);
+			}
 			break;
 
 		case TALKTYPE_BROADCAST:
