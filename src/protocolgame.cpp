@@ -1089,7 +1089,10 @@ void ProtocolGame::parseLookInBattleList(NetworkMessage& msg)
 
 void ProtocolGame::parseSay(NetworkMessage& msg)
 {
-	std::string_view receiver;
+	// getString() returns a converted std::string by value (latin-1 -> utf-8);
+	// binding it to a string_view would dangle once the temporary dies. Names
+	// longer than the SSO buffer (15 chars) then read reused heap memory.
+	std::string receiver;
 	uint16_t channelId;
 
 	SpeakClasses type = static_cast<SpeakClasses>(msg.getByte());
@@ -1286,7 +1289,7 @@ void ProtocolGame::parseRuleViolationReport(NetworkMessage& msg)
 	uint8_t reportReason = msg.getByte();
 	auto targetName = msg.getString();
 	auto comment = msg.getString();
-	std::string_view translation;
+	std::string translation; // see parseSay: getString() temporaries must not feed a string_view
 	if (reportType == REPORT_TYPE_NAME) {
 		translation = msg.getString();
 	} else if (reportType == REPORT_TYPE_STATEMENT) {
