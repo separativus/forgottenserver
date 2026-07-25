@@ -2535,6 +2535,12 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	sendVIPEntries();
 
 	player->sendIcons(); // active conditions
+
+	// containers saved open at logout — sent last: the 7.x client can only
+	// handle 0x6E once the login bundle put it in game
+	for (const auto& it : player->getOpenContainers()) {
+		sendContainer(it.first, it.second.container, it.second.container->hasParent(), it.second.index);
+	}
 }
 
 void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& newPos, int32_t newStackPos,

@@ -433,9 +433,12 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result)
 		}
 	}
 
+	// Register the containers saved open at logout, but don't send them yet:
+	// loadPlayer runs before the login bundle, and the 7.x client
+	// debug-asserts on a 0x6E arriving ahead of the 0x0A login packet.
+	// ProtocolGame::sendAddCreature sends them once the client is in game.
 	for (auto& it : openContainersList) {
 		player->addContainer(it.first - 1, it.second);
-		player->onSendContainer(it.second);
 	}
 
 	// load depot items
