@@ -1,0 +1,31 @@
+# Dependabot reads this file from the repository's default branch (master, a
+# byte-identical mirror of otland/forgottenserver) but every pull request it
+# opens targets 7.60 — that is the branch this fork actually develops, and the
+# engine separativus/tibiafun-tfs-migration ships.
+#
+# Weekly, Monday morning, Berlin time, matching the other repositories on the
+# migration host. vcpkg has no dependabot ecosystem; the upstream
+# update-vcpkg.yml workflow is what moves that baseline.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: "7.60"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+
+  - package-ecosystem: docker
+    # The Dockerfile at the repository root. The builder image in ci-760.yml
+    # is an inline heredoc, not a file, so dependabot cannot see it — keep its
+    # bookworm base in step with Dockerfiles/server in the migration repo.
+    directory: /
+    target-branch: "7.60"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin

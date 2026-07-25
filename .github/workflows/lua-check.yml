@@ -1,3 +1,6 @@
+# Upstream workflow, kept for parity with master. The 7.60 branch has its own
+# pipeline (ci-760.yml) on self-hosted runners, so the trigger is pinned to the
+# upstream-tracking branches instead of firing on every branch and pull request.
 name: Lua syntax check, lint, and format
 
 on:
@@ -12,6 +15,10 @@ on:
       - "data/**.lua"
 
   pull_request:
+    branches:
+      - master
+      - v*
+
     paths:
       - .github/workflows/lua-check.yml
       - config.lua.dist
