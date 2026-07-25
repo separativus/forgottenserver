@@ -2,10 +2,8 @@ function Monster:onDropLoot(corpse)
 	if hasEvent.onDropLoot then
 		Event.onDropLoot(self, corpse)
 	end
-	local player = Player(corpse:getCorpseOwner())
-	if player then
-		player:updateKillTracker(self, corpse)
-	end
+	-- no updateKillTracker here: its 0xD1 kill-tracker packet is a Tibia 12
+	-- feature — the 7.x client debug-asserts on the unknown packet type
 end
 
 function Monster:onSpawn(position, startup, artificial)
