@@ -4032,7 +4032,7 @@ bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* ta
 					break;
 				}
 				case COMBAT_HOLYDAMAGE: {
-					hitEffect = CONST_ME_HOLYDAMAGE;
+					hitEffect = CONST_ME_YELLOW_RINGS; // holydamage (40) is past the 7.x dat
 					break;
 				}
 				default: {
@@ -4112,7 +4112,7 @@ void Game::combatGetTypeInfo(CombatType_t combatType, Creature* target, TextColo
 					break;
 				case RACE_INK:
 					color = TEXTCOLOR_DARKGREY;
-					effect = CONST_ME_DRAWINK;
+					effect = CONST_ME_HITAREA; // drawink (202) is past the 7.x dat
 					if (const Tile* tile = target->getTile()) {
 						if (tile && !tile->hasFlag(TILESTATE_PROTECTIONZONE)) {
 							splash = Item::CreateItem(ITEM_SMALLSPLASH, FLUID_INK);
@@ -4155,19 +4155,24 @@ void Game::combatGetTypeInfo(CombatType_t combatType, Creature* target, TextColo
 			effect = CONST_ME_HITBYFIRE;
 			break;
 		}
+		// The three damage types the 7.6 client has no sprite for: their TFS
+		// effects (44/40/39) are past the dat's 25 and would kill the client on
+		// every hit — a lich's death damage alone. Degraded to what the legacy
+		// engine drew: death magic was NM_ME_MORT_AREA, ice/holy did not exist,
+		// so they borrow the drown splash and the yellow rings.
 		case COMBAT_ICEDAMAGE: {
 			color = TEXTCOLOR_SKYBLUE;
-			effect = CONST_ME_ICEATTACK;
+			effect = CONST_ME_LOSEENERGY;
 			break;
 		}
 		case COMBAT_HOLYDAMAGE: {
 			color = TEXTCOLOR_YELLOW;
-			effect = CONST_ME_HOLYDAMAGE;
+			effect = CONST_ME_YELLOW_RINGS;
 			break;
 		}
 		case COMBAT_DEATHDAMAGE: {
 			color = TEXTCOLOR_DARKRED;
-			effect = CONST_ME_SMALLCLOUDS;
+			effect = CONST_ME_MORTAREA;
 			break;
 		}
 		case COMBAT_LIFEDRAIN: {

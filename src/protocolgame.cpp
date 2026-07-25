@@ -2268,6 +2268,15 @@ void ProtocolGame::sendPingBack()
 
 void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, uint8_t type)
 {
+	// The 7.60 and 7.72 dat both hold 15 missiles, indexed 1..15 (the legacy
+	// 7.6 server stopped at the same id, const76.h NM_ANI_FLYPOISONFIELD).
+	// Everything past that — our enum keeps counting up to 59 for the 13.x
+	// client — debug-asserts the client ("Container.h 178: index out of range")
+	// and ends the session, so drop it instead of sending it.
+	if (type == CONST_ANI_NONE || type > CONST_ANI_POISON) {
+		return;
+	}
+
 	// 7.x distance effect: from, to, effect byte (no 13.x effect loop).
 	NetworkMessage msg;
 	msg.addByte(0x85);
@@ -2280,6 +2289,13 @@ void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, u
 void ProtocolGame::sendMagicEffect(const Position& pos, uint8_t type)
 {
 	if (!canSee(pos)) {
+		return;
+	}
+
+	// Same bound as the missiles above: 25 effects in the dat, 1..25 on the
+	// wire (const76.h stops at NM_ME_SOUND_WHITE), anything else kills the
+	// client. CONST_ME_NONE is the engine's "draw nothing" sentinel.
+	if (type == CONST_ME_NONE || type > CONST_ME_SOUND_WHITE) {
 		return;
 	}
 
