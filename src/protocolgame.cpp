@@ -1548,13 +1548,13 @@ void ProtocolGame::sendAddMarker(const Position& pos, uint8_t markType, const st
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendReLoginWindow(uint8_t unfairFightReduction)
+void ProtocolGame::sendReLoginWindow(uint8_t)
 {
-	NetworkMessage msg;
-	msg.addByte(0x28);
-	msg.addByte(0x00);
-	msg.addByte(unfairFightReduction);
-	writeToOutputBuffer(msg);
+	// 0x28 (the relogin window) is an 8.x+ opcode; to a 7.x client it is an
+	// unknown packet type and the session dies right on death. The legacy
+	// engine sent MSG_ADVANCE "You are dead." here (game.cpp) and let the
+	// client handle its own death dialog, so that is what goes out.
+	sendTextMessage(TextMessage(MESSAGE_EVENT_ADVANCE, "You are dead."));
 }
 
 void ProtocolGame::sendStats()
