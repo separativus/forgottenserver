@@ -168,8 +168,11 @@ void Creature::onAttacking(uint32_t interval)
 		return;
 	}
 
+	// TibiaFun #15: being targeted is not fighting. Only the attacker keeps its
+	// own fight window warm here; the target is stamped by real hit attempts
+	// (blockHit/drainMana), so a hostile that never lands a blow — a caged
+	// trainer, a toothless town dog — cannot pin a player's logout block.
 	onAttacked();
-	attackedCreature->onAttacked();
 
 	if (g_game.isSightClear(getPosition(), attackedCreature->getPosition(), true)) {
 		doAttacking(interval);
@@ -945,8 +948,10 @@ bool Creature::setAttackedCreature(Creature* creature)
 		}
 
 		attackedCreature = creature;
+		// TibiaFun #15: selecting a target stamps the attacker's side only
+		// (onAttackedCreature); the target's fight state reacts to real hit
+		// attempts, not to a monster merely picking it.
 		onAttackedCreature(attackedCreature);
-		attackedCreature->onAttacked();
 	} else {
 		attackedCreature = nullptr;
 	}
