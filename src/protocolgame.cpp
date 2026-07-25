@@ -106,6 +106,16 @@ std::size_t clientLogin(const Player& player)
 	return waitList.size();
 }
 
+// Skill and magic-level progress are kept in basis points (0..10000, see
+// Player::getBasisPointLevel) because the 12.x client draws two decimals. The
+// 7.x wire has a single percent byte per bar, and the client asserts on
+// anything above 100 ("Creatures.cpp: In(Progress,0,100)") — a truncated basis
+// point value ends the session at login (43.20% -> 4320 -> 4320 & 0xFF = 224).
+constexpr uint8_t basisPointsToPercent(uint16_t basisPoints)
+{
+	return std::min<uint16_t>(basisPoints / 100, 100);
+}
+
 } // namespace
 
 void ProtocolGame::release()
@@ -2908,7 +2918,7 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 	msg.add<uint16_t>(std::min<int32_t>(player->getMaxMana(), std::numeric_limits<uint16_t>::max()));
 
 	msg.addByte(std::min<uint32_t>(player->getMagicLevel(), std::numeric_limits<uint8_t>::max()));
-	msg.addByte(player->getMagicLevelPercent());
+	msg.addByte(basisPointsToPercent(player->getMagicLevelPercent()));
 
 	msg.addByte(player->getSoul());
 }
@@ -2920,7 +2930,7 @@ void ProtocolGame::AddPlayerSkills(NetworkMessage& msg)
 
 	for (uint8_t i = SKILL_FIRST; i <= SKILL_LAST; ++i) {
 		msg.addByte(std::min<int32_t>(player->getSkillLevel(i), std::numeric_limits<uint8_t>::max()));
-		msg.addByte(player->getSkillPercent(i));
+		msg.addByte(basisPointsToPercent(player->getSkillPercent(i)));
 	}
 }
 
