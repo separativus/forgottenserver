@@ -823,7 +823,13 @@ void ProtocolGame::checkCreatureAsKnown(uint32_t id, bool& known, uint32_t& remo
 
 	known = false;
 
-	if (knownCreatureSet.size() > 1300) {
+	// The 7.x client keeps a fixed table of 150 known creatures (1300 is the
+	// 8.x client's). Walking past the 151st creature without evicting one
+	// overflows that table and the stomped entry is drawn with a zeroed
+	// outfit: item id 0, i.e. "Debug Assertion ... module Container ...
+	// Parameter: -100". Both the legacy engine (protocol76.cpp) and Nekiro's
+	// 1.5 downgrade evict beyond 150.
+	if (knownCreatureSet.size() > 150) {
 		// Look for a creature to remove
 		for (auto it = knownCreatureSet.begin(), end = knownCreatureSet.end(); it != end; ++it) {
 			Creature* creature = g_game.getCreatureByID(*it);
