@@ -654,14 +654,11 @@ public:
 			return;
 		}
 
-		if (creature->getPlayer()) {
-			if (visible) {
-				client->sendCreatureOutfit(creature, creature->getCurrentOutfit());
-			} else {
-				static Outfit_t outfit;
-				client->sendCreatureOutfit(creature, outfit);
-			}
-		} else if (canSeeInvisibility()) {
+		// A player creature is never taken off anyone's screen (canSeeCreature
+		// keeps it visible), so it keeps its real outfit: the zeroed outfit TFS
+		// sends for an invisible player is client item id 0 on the 7.x wire and
+		// debug-asserts every client in range (see ProtocolGame::AddOutfit).
+		if (creature->getPlayer() || canSeeInvisibility()) {
 			client->sendCreatureOutfit(creature, creature->getCurrentOutfit());
 		} else {
 			int32_t stackpos = creature->getTile()->getClientIndexOfCreature(this, creature);

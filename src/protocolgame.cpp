@@ -116,6 +116,12 @@ constexpr uint8_t basisPointsToPercent(uint16_t basisPoints)
 	return std::min<uint16_t>(basisPoints / 100, 100);
 }
 
+// The shipped dat draws 254 outfits (and objects from client id 100, so an item
+// outfit of 0 indexes at -100). 128 is the male citizen the datapack sanitizer
+// falls back to as well (converters/common.py).
+constexpr uint16_t MAX_LOOKTYPE = 254;
+constexpr uint16_t FALLBACK_LOOKTYPE = 128;
+
 } // namespace
 
 void ProtocolGame::release()
@@ -2879,13 +2885,14 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 
 	msg.addByte(creature->getDirection());
 
-	if (!creature->isInGhostMode() && !creature->isInvisible()) {
-		const Outfit_t& outfit = creature->getCurrentOutfit();
-		AddOutfit(msg, outfit);
-	} else {
-		static Outfit_t outfit;
-		AddOutfit(msg, outfit);
-	}
+	// TFS describes a ghost or invisible creature with a zeroed outfit — an 8.x+
+	// idea, where it means "draw nothing". On the 7.x wire that zero is a
+	// lookTypeEx, i.e. client item id 0, and the client's object table starts at
+	// id 100: it indexes at -100 and the session dies with "debug assertion in
+	// module Container". A creature only reaches this point if the player may see
+	// it at all (Player::canSeeCreature), and the 7.6 engine drew those with their
+	// real outfit, so that is what goes out.
+	AddOutfit(msg, creature->getCurrentOutfit());
 
 	LightInfo lightInfo = creature->getCreatureLight();
 	msg.addByte(player->isAccessPlayer() ? 0xFF : lightInfo.level);
@@ -2940,18 +2947,34 @@ void ProtocolGame::AddOutfit(NetworkMessage& msg, const Outfit_t& outfit)
 	// u16 with 7.7 — sending the u16 to a 760 session desyncs the stream one
 	// byte per creature ("debug assertion in module Container"). No addons,
 	// no mount either way.
-	if (version <= 760) {
-		msg.addByte(std::min<uint16_t>(outfit.lookType, std::numeric_limits<uint8_t>::max()));
-	} else {
-		msg.add<uint16_t>(outfit.lookType);
+	// An item outfit ("looktypeex") goes out as a client item id, and ids the dat
+	// cannot draw — 0 above all, which is what an item the OTB does not know
+	// resolves to — index the client's object table out of range: same debug
+	// assertion. Fall back to a drawable outfit instead of emitting one.
+	uint16_t lookType = outfit.lookType;
+	uint16_t lookTypeEx = lookType == 0 ? Item::items[outfit.lookTypeEx].clientId : 0;
+	if (lookType == 0 && lookTypeEx == 0) {
+		lookType = FALLBACK_LOOKTYPE;
 	}
-	if (outfit.lookType != 0) {
+	// The dat draws 254 outfits, so a higher looktype runs off the client's
+	// outfit table the same way — reachable from a GM's /looktype and from any
+	// creature:setOutfit, neither of which the datapack can bound.
+	if (lookType > MAX_LOOKTYPE) {
+		lookType = FALLBACK_LOOKTYPE;
+	}
+
+	if (version <= 760) {
+		msg.addByte(std::min<uint16_t>(lookType, std::numeric_limits<uint8_t>::max()));
+	} else {
+		msg.add<uint16_t>(lookType);
+	}
+	if (lookType != 0) {
 		msg.addByte(outfit.lookHead);
 		msg.addByte(outfit.lookBody);
 		msg.addByte(outfit.lookLegs);
 		msg.addByte(outfit.lookFeet);
 	} else {
-		msg.addItemId(outfit.lookTypeEx);
+		msg.add<uint16_t>(lookTypeEx);
 	}
 }
 
