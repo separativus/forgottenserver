@@ -698,10 +698,11 @@ static constexpr int32_t CHANNEL_PARTY = 0x01;
 static constexpr int32_t CHANNEL_PRIVATE = 0xFFFF;
 // TibiaFun combat log channel (data/chatchannels/chatchannels.xml)
 static constexpr int32_t CHANNEL_LOG = 9;
-// TibiaFun npc conversation channel: opened when an npc takes focus, closed
-// when it releases it. Never registered with g_chat — player lines addressed
-// to it are routed straight to the npcs in view (Game::playerSay).
+// TibiaFun npc conversation channel: one tab for every npc a player talks to.
+// Never registered with g_chat — player lines addressed to it are routed
+// straight to the npcs in view (Game::playerSay).
 static constexpr int32_t CHANNEL_NPC = 10;
+inline const std::string NPC_CHANNEL_NAME = "NPCs";
 
 // Reserved player storage key ranges;
 //[10000000 - 20000000];

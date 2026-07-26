@@ -775,12 +775,11 @@ public:
 
 	void onCreatureAppear(Creature* creature, bool isLogin) override;
 	void onRemoveCreature(Creature* creature, bool isLogout) override;
-	// TibiaFun: the npc whose conversation tab this client currently holds.
-	// Zero means no tab — either never opened, closed by the npc, or closed
-	// by the player (Game::playerCloseChannel), in which case the npc's next
-	// line opens it again.
-	void setNpcChannelOwner(uint32_t npcId) { npcChannelOwner = npcId; }
-	uint32_t getNpcChannelOwner() const { return npcChannelOwner; }
+	// TibiaFun: whether this client still holds the npc conversation tab. It
+	// drops to false when the player closes it (Game::playerCloseChannel), so
+	// the next npc line opens it again.
+	void setNpcChannel(bool open) { npcChannelOpen = open; }
+	bool hasNpcChannel() const { return npcChannelOpen; }
 	void onCreatureMove(Creature* creature, const Tile* newTile, const Position& newPos, const Tile* oldTile,
 	                    const Position& oldPos, bool teleport) override;
 
@@ -1289,7 +1288,7 @@ private:
 	bool wasMounted = false;
 	bool ghostMode = false;
 	bool pzLocked = false;
-	uint32_t npcChannelOwner = 0;
+	bool npcChannelOpen = false;
 	int64_t lastMonsterFight = 0;
 	int64_t lastPvpFight = 0;
 	bool isConnecting = false;

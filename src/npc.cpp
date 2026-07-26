@@ -479,7 +479,7 @@ void Npc::doSayToPlayer(Player* player, const std::string& text)
 	// private chat window it has an id the server can close again — and,
 	// because every line makes sure the tab is there, a player who closed it
 	// gets it back with the npc's next word.
-	if (player->getNpcChannelOwner() != getID()) {
+	if (!player->hasNpcChannel()) {
 		openChannel(player);
 		// A line that reaches the client in the same frame that created the
 		// channel is dropped instead of shown in it — the quirk the private
@@ -499,30 +499,14 @@ void Npc::doSayToPlayer(Player* player, const std::string& text)
 
 void Npc::openChannel(Player* player)
 {
-	if (player) {
-		// Only relabel an existing tab: closing one the player does not have
-		// makes the client announce "The channel has been closed" for nothing.
-		if (player->getNpcChannelOwner() != 0) {
-			player->sendClosePrivate(CHANNEL_NPC);
-		}
-		// 0xB2, not 0xAC: the 7.72 client only ever removes a tab on 0xB3 if it
-		// knows the channel as a private one — a channel opened the public way
-		// prints "The channel has been closed" and stays put. The legacy 7.6
-		// server handed out private channels from id 10 up and closed them
-		// exactly like this.
-		player->sendCreatePrivateChannel(CHANNEL_NPC, getName());
-		player->setNpcChannelOwner(getID());
-	}
-}
-
-void Npc::closeChannel(Player* player)
-{
-	// Only whoever owns the tab may drop it: a close armed by an npc the
-	// player has since walked away from must not shut the conversation they
-	// are having now.
-	if (player && player->getNpcChannelOwner() == getID()) {
-		player->setNpcChannelOwner(0);
-		player->sendClosePrivate(CHANNEL_NPC);
+	// One tab named for the job rather than for the speaker: the 7.72 client
+	// cannot be told to remove a chat window (0xB3 only prints "The channel has
+	// been closed" and leaves it), so a per-npc label would mean closing and
+	// reopening on every switch — a message and a flicker each time. Every line
+	// carries its speaker's name anyway.
+	if (player && !player->hasNpcChannel()) {
+		player->sendChannel(CHANNEL_NPC, NPC_CHANNEL_NAME, nullptr, nullptr);
+		player->setNpcChannel(true);
 	}
 }
 
@@ -760,7 +744,6 @@ void NpcScriptInterface::registerFunctions()
 	tfs::lua::registerMethod(L, "Npc", "getParameter", NpcScriptInterface::luaNpcGetParameter);
 	tfs::lua::registerMethod(L, "Npc", "setFocus", NpcScriptInterface::luaNpcSetFocus);
 	tfs::lua::registerMethod(L, "Npc", "sayTo", NpcScriptInterface::luaNpcSayTo);
-	tfs::lua::registerMethod(L, "Npc", "closeChannel", NpcScriptInterface::luaNpcCloseChannel);
 
 	tfs::lua::registerMethod(L, "Npc", "openShopWindow", NpcScriptInterface::luaNpcOpenShopWindow);
 	tfs::lua::registerMethod(L, "Npc", "closeShopWindow", NpcScriptInterface::luaNpcCloseShopWindow);
@@ -1134,17 +1117,6 @@ int NpcScriptInterface::luaNpcSetFocus(lua_State* L)
 		lua_pushnil(L);
 	}
 	return 1;
-}
-
-int NpcScriptInterface::luaNpcCloseChannel(lua_State* L)
-{
-	// npc:closeChannel(player) — the conversation is over, drop the tab.
-	Npc* npc = tfs::lua::getUserdata<Npc>(L, 1);
-	Player* target = tfs::lua::getPlayer(L, 2);
-	if (npc && target) {
-		npc->closeChannel(target);
-	}
-	return 0;
 }
 
 int NpcScriptInterface::luaNpcSayTo(lua_State* L)
