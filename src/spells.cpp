@@ -1166,7 +1166,13 @@ bool RuneSpell::executeUse(Player* player, Item* item, const Position&, Thing* t
 	}
 
 	if (hasCharges && item && getBoolean(ConfigManager::REMOVE_RUNE_CHARGES)) {
-		int32_t newCount = std::max<int32_t>(0, item->getItemCount() - 1);
+		// A rune keeps its charges in an attribute, not in count: the item is
+		// not stackable, so Item::Item leaves count at 1 and getItemCount()
+		// answers 1 no matter how many charges the rune carries — every rune
+		// died on its first cast. getSubType() is the value transformItem
+		// writes back through setSubType(), which is what WEAPONACTION_REMOVECHARGE
+		// already uses one file over.
+		int32_t newCount = std::max<int32_t>(0, item->getSubType() - 1);
 		player->sendSupplyUsed(item->getClientID());
 		g_game.transformItem(item, item->getID(), newCount);
 	}
