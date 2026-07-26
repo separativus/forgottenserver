@@ -489,7 +489,10 @@ void Npc::openChannel(Player* player)
 
 void Npc::closeChannel(Player* player)
 {
-	if (player) {
+	// Only whoever owns the tab may drop it: a close armed by an npc the
+	// player has since walked away from must not shut the conversation they
+	// are having now.
+	if (player && player->getNpcChannelOwner() == getID()) {
 		player->setNpcChannelOwner(0);
 		player->sendClosePrivate(CHANNEL_NPC);
 	}
@@ -729,7 +732,6 @@ void NpcScriptInterface::registerFunctions()
 	tfs::lua::registerMethod(L, "Npc", "getParameter", NpcScriptInterface::luaNpcGetParameter);
 	tfs::lua::registerMethod(L, "Npc", "setFocus", NpcScriptInterface::luaNpcSetFocus);
 	tfs::lua::registerMethod(L, "Npc", "sayTo", NpcScriptInterface::luaNpcSayTo);
-	tfs::lua::registerMethod(L, "Npc", "openPrivateChannel", NpcScriptInterface::luaNpcOpenPrivateChannel);
 	tfs::lua::registerMethod(L, "Npc", "closeChannel", NpcScriptInterface::luaNpcCloseChannel);
 
 	tfs::lua::registerMethod(L, "Npc", "openShopWindow", NpcScriptInterface::luaNpcOpenShopWindow);
@@ -1104,18 +1106,6 @@ int NpcScriptInterface::luaNpcSetFocus(lua_State* L)
 		lua_pushnil(L);
 	}
 	return 1;
-}
-
-int NpcScriptInterface::luaNpcOpenPrivateChannel(lua_State* L)
-{
-	// npc:openPrivateChannel(player) — make the client open/focus this npc's
-	// private chat window ahead of a delayed reply (window first, message second).
-	Npc* npc = tfs::lua::getUserdata<Npc>(L, 1);
-	Player* target = tfs::lua::getPlayer(L, 2);
-	if (npc && target) {
-		target->sendOpenPrivateChannel(npc->getName());
-	}
-	return 0;
 }
 
 int NpcScriptInterface::luaNpcCloseChannel(lua_State* L)
