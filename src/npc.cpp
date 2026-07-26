@@ -6,6 +6,7 @@
 #include "npc.h"
 
 #include "game.h"
+#include "scheduler.h"
 #include "pugicast.h"
 #include "spectators.h"
 
@@ -463,25 +464,42 @@ void Npc::doSay(const std::string& text) { g_game.internalCreatureSay(this, TALK
 
 void Npc::doSayToPlayer(Player* player, const std::string& text)
 {
-	if (player) {
-		// TibiaFun: npc dialogue lives in the npc conversation channel. Unlike a
-		// private chat window it has an id the server can close again — and,
-		// because every line makes sure the tab is there, a player who closed
-		// it gets it back with the npc's next word.
-		if (player->getNpcChannelOwner() != getID()) {
-			openChannel(player);
-		}
-		player->sendChannelMessage(getName(), text, TALKTYPE_CHANNEL_Y, CHANNEL_NPC);
-		player->onCreatureSay(this, TALKTYPE_PRIVATE, text);
+	if (!player) {
+		return;
 	}
+
+	player->onCreatureSay(this, TALKTYPE_PRIVATE, text);
+
+	// TibiaFun: npc dialogue lives in the npc conversation channel. Unlike a
+	// private chat window it has an id the server can close again — and,
+	// because every line makes sure the tab is there, a player who closed it
+	// gets it back with the npc's next word.
+	if (player->getNpcChannelOwner() != getID()) {
+		openChannel(player);
+		// A line that reaches the client in the same frame that created the
+		// channel is dropped instead of shown in it — the quirk the private
+		// message flow works around the same way (Game::playerSpeakTo). Let the
+		// tab exist first, then speak into it.
+		g_scheduler.addEvent(createSchedulerTask(
+		    150, [playerId = player->getID(), author = getName(), text]() {
+			    if (Player* target = g_game.getPlayerByID(playerId)) {
+				    target->sendChannelMessage(author, text, TALKTYPE_CHANNEL_Y, CHANNEL_NPC);
+			    }
+		    }));
+		return;
+	}
+
+	player->sendChannelMessage(getName(), text, TALKTYPE_CHANNEL_Y, CHANNEL_NPC);
 }
 
 void Npc::openChannel(Player* player)
 {
 	if (player) {
-		// close first: the tab carries this npc's name, so a conversation with
-		// another npc must not reuse the previous label.
-		player->sendClosePrivate(CHANNEL_NPC);
+		// Only relabel an existing tab: closing one the player does not have
+		// makes the client announce "The channel has been closed" for nothing.
+		if (player->getNpcChannelOwner() != 0) {
+			player->sendClosePrivate(CHANNEL_NPC);
+		}
 		player->sendChannel(CHANNEL_NPC, getName(), nullptr, nullptr);
 		player->setNpcChannelOwner(getID());
 	}
