@@ -2037,7 +2037,7 @@ void Game::playerCloseChannel(uint32_t playerId, uint16_t channelId)
 	if (channelId == CHANNEL_NPC) {
 		// No g_chat channel behind the npc tab, so there is no membership to
 		// drop — just remember it is gone; the npc's next line reopens it.
-		player->setNpcChannelOwner(0);
+		player->setNpcChannel(false);
 		return;
 	}
 
