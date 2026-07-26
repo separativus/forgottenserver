@@ -37,7 +37,7 @@ private:
 	static int luaNpcGetParameter(lua_State* L);
 	static int luaNpcSetFocus(lua_State* L);
 	static int luaNpcSayTo(lua_State* L);
-	static int luaNpcOpenPrivateChannel(lua_State* L);
+	static int luaNpcCloseChannel(lua_State* L);
 
 	static int luaNpcOpenShopWindow(lua_State* L);
 	static int luaNpcCloseShopWindow(lua_State* L);
@@ -187,6 +187,8 @@ public:
 
 	void doSay(const std::string& text);
 	void doSayToPlayer(Player* player, const std::string& text);
+	void openChannel(Player* player);
+	void closeChannel(Player* player);
 
 	bool doMoveTo(const Position& pos, int32_t minTargetDist = 1, int32_t maxTargetDist = 1, bool fullPathSearch = true,
 	              bool clearSight = true, int32_t maxSearchDist = 0);
