@@ -192,19 +192,40 @@ do
 			end
 		end
 
+		-- TibiaFun legacy rune wording. The original engine matched every
+		-- rune-group item ahead of the atk/def/charges branches (item.cpp
+		-- getDescription: `runeMagLevel != -1`), so a rune showed neither the
+		-- attribute parenthesis nor the vocation sentence — but it did show how
+		-- many casts were left, which is the whole reason to look at one:
+		--     a spell rune for level 15.
+		--     It's an "adori vita vis" spell (100x).
+		--     It weighs 10.00 oz.
+		-- Unregistered rune items (the mana rune is an action script, not a spell)
+		-- print level 0, and the charge count falls back to 1, both exactly as the
+		-- legacy code did. "It's an" is the original's grammar, kept on purpose.
+		if itemType:isRune() then
+			local runeSpell = Spell(itemType:getId())
+			local charges = isVirtual and itemType:getCharges() or item:getCharges()
+			local response = {
+				string.format("%sspell rune for level %d.\nIt's an \"%s\" spell (%dx).",
+					addArticle and "a " or "",
+					runeSpell and runeSpell:runeMagicLevel() or 0,
+					itemType:getName(),
+					charges > 0 and charges or 1)
+			}
+
+			if lookDistance <= 1 and isPickupable and not isUnique then
+				response[#response + 1] = string.format("\nIt weighs %0.2f oz.", item:getWeight() / 100)
+			end
+
+			return table.concat(response, "")
+		end
+
 		-- read item name with article
 		local itemName = item:getNameDescription(subType, addArticle)
 
 		-- things that will go in parenthesis "(...)"
 		local descriptions = {}
-
-		-- spell words
-		do
-			local spellName = itemType:getRuneSpellName()
-			if spellName then
-				descriptions[#descriptions + 1] = string.format('"%s"', spellName)
-			end
-		end
 
 		-- container capacity
 		do
