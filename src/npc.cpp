@@ -401,9 +401,14 @@ void Npc::onCreatureMove(Creature* creature, const Tile* newTile, const Position
 	// only notices players who walk out of talkRadius while still in sight (it
 	// checks from onThink, which stops once we idle), so focus used to stick
 	// forever — the npc would not greet that player again on their return.
-	if (Player* player = creature->getPlayer(); player && creature != this) {
-		bool couldSee = canSee(oldPos);
-		if (couldSee && !canSee(newPos) && npcEventHandler) {
+	// Leaving our view ends the conversation. Deliberately the viewport and not
+	// Npc::canSee's talk-radius box: inside it the handler's own onThink notices
+	// the player walking off and says its walk-away line, and this hook would
+	// preempt that. What it is here for is the player who leaves the npc's world
+	// entirely — onThink stops once nobody is in view, which used to leave focus
+	// stuck forever.
+	if (Player* player = creature->getPlayer(); player && creature != this && npcEventHandler) {
+		if (Creature::canSee(oldPos) && !Creature::canSee(newPos)) {
 			npcEventHandler->onCreatureDisappear(creature);
 		}
 	}
@@ -500,7 +505,12 @@ void Npc::openChannel(Player* player)
 		if (player->getNpcChannelOwner() != 0) {
 			player->sendClosePrivate(CHANNEL_NPC);
 		}
-		player->sendChannel(CHANNEL_NPC, getName(), nullptr, nullptr);
+		// 0xB2, not 0xAC: the 7.72 client only ever removes a tab on 0xB3 if it
+		// knows the channel as a private one — a channel opened the public way
+		// prints "The channel has been closed" and stays put. The legacy 7.6
+		// server handed out private channels from id 10 up and closed them
+		// exactly like this.
+		player->sendCreatePrivateChannel(CHANNEL_NPC, getName());
 		player->setNpcChannelOwner(getID());
 	}
 }
