@@ -122,6 +122,68 @@ constexpr uint8_t basisPointsToPercent(uint16_t basisPoints)
 constexpr uint16_t MAX_LOOKTYPE = 254;
 constexpr uint16_t FALLBACK_LOOKTYPE = 128;
 
+// The rest of a creature description is table indices and bar geometry in the
+// 7.x client, and TFS counts in the 8.x+ sets: eight directions where the
+// client draws four, a black and an orange skull after its last one, the
+// shared-experience party shields, and a health percentage nothing bounds. The
+// client range-checks none of them — it stores them and dies on the next
+// repaint of whatever draws them, which is the panel content the sidebar
+// windows are made of. The legacy 7.6 engine emitted none of these: its
+// protocol76.cpp AddCreature sent std::max(1, health * 100 / healthmax), a
+// direction it only ever set to NORTH..WEST, and skull/shield bytes built from
+// a 0..4 set.
+uint8_t creatureHealthPercent(const Creature* creature)
+{
+	if (creature->isHealthHidden()) {
+		return 0;
+	}
+
+	const int32_t percent = std::ceil((static_cast<double>(creature->getHealth()) /
+	                                   std::max<int32_t>(creature->getMaxHealth(), 1)) *
+	                                  100);
+	return std::clamp(percent, 1, 100);
+}
+
+uint8_t clientDirection(Direction direction)
+{
+	switch (direction) {
+		case DIRECTION_SOUTHWEST:
+		case DIRECTION_NORTHWEST:
+			return DIRECTION_WEST;
+		case DIRECTION_SOUTHEAST:
+		case DIRECTION_NORTHEAST:
+			return DIRECTION_EAST;
+		default:
+			return direction <= DIRECTION_WEST ? direction : DIRECTION_SOUTH;
+	}
+}
+
+uint8_t clientSkull(uint8_t skull) { return std::min<uint8_t>(skull, SKULL_RED); }
+
+uint8_t clientPartyShield(uint8_t shield)
+{
+	switch (shield) {
+		case SHIELD_BLUE_SHAREDEXP:
+		case SHIELD_BLUE_NOSHAREDEXP_BLINK:
+		case SHIELD_BLUE_NOSHAREDEXP:
+			return SHIELD_BLUE;
+		case SHIELD_YELLOW_SHAREDEXP:
+		case SHIELD_YELLOW_NOSHAREDEXP_BLINK:
+		case SHIELD_YELLOW_NOSHAREDEXP:
+			return SHIELD_YELLOW;
+		case SHIELD_GRAY:
+			return SHIELD_NONE;
+		default:
+			return shield;
+	}
+}
+
+// The client times a step by dividing by the speed.
+uint16_t clientSpeed(uint32_t speed)
+{
+	return std::clamp<uint32_t>(speed, 1, std::numeric_limits<uint16_t>::max());
+}
+
 } // namespace
 
 void ProtocolGame::release()
@@ -1515,7 +1577,7 @@ void ProtocolGame::sendCreatureShield(const Creature* creature)
 	NetworkMessage msg;
 	msg.addByte(0x91);
 	msg.add<uint32_t>(creature->getID());
-	msg.addByte(player->getPartyShield(creature->getPlayer()));
+	msg.addByte(clientPartyShield(player->getPartyShield(creature->getPlayer())));
 	writeToOutputBuffer(msg);
 }
 
@@ -1532,7 +1594,7 @@ void ProtocolGame::sendCreatureSkull(const Creature* creature)
 	NetworkMessage msg;
 	msg.addByte(0x90);
 	msg.add<uint32_t>(creature->getID());
-	msg.addByte(player->getSkullClient(creature));
+	msg.addByte(clientSkull(player->getSkullClient(creature)));
 	writeToOutputBuffer(msg);
 }
 
@@ -2158,7 +2220,7 @@ void ProtocolGame::sendCreatureTurn(const Creature* creature, uint32_t stackpos)
 
 	msg.add<uint16_t>(0x63);
 	msg.add<uint32_t>(creature->getID());
-	msg.addByte(creature->getDirection());
+	msg.addByte(clientDirection(creature->getDirection()));
 	writeToOutputBuffer(msg);
 }
 
@@ -2278,7 +2340,7 @@ void ProtocolGame::sendChangeSpeed(const Creature* creature, uint32_t speed)
 	NetworkMessage msg;
 	msg.addByte(0x8F);
 	msg.add<uint32_t>(creature->getID());
-	msg.add<uint16_t>(speed);
+	msg.add<uint16_t>(clientSpeed(speed));
 	writeToOutputBuffer(msg);
 }
 
@@ -2286,7 +2348,7 @@ void ProtocolGame::sendCancelWalk()
 {
 	NetworkMessage msg;
 	msg.addByte(0xB5);
-	msg.addByte(player->getDirection());
+	msg.addByte(clientDirection(player->getDirection()));
 	writeToOutputBuffer(msg);
 }
 
@@ -2379,13 +2441,7 @@ void ProtocolGame::sendCreatureHealth(const Creature* creature)
 	NetworkMessage msg;
 	msg.addByte(0x8C);
 	msg.add<uint32_t>(creature->getID());
-
-	if (creature->isHealthHidden()) {
-		msg.addByte(0x00);
-	} else {
-		msg.addByte(std::ceil(
-		    (static_cast<double>(creature->getHealth()) / std::max<int32_t>(creature->getMaxHealth(), 1)) * 100));
-	}
+	msg.addByte(creatureHealthPercent(creature));
 	writeToOutputBuffer(msg);
 }
 
@@ -2458,8 +2514,15 @@ void ProtocolGame::sendUpdateTileCreature(const Position& pos, uint32_t stackpos
 	msg.addPosition(pos);
 	msg.addByte(stackpos);
 
+	// The point of this packet is to re-describe a creature the client may well
+	// know already (its name changed), so it goes out as the long form either
+	// way. checkCreatureAsKnown only writes removedKnown when it has to evict
+	// something, though: uninitialised, an already known creature made the
+	// client forget whatever id the stack happened to hold. Everything it was
+	// still showing for that id — a creature on the map, a row in the battle
+	// window — then belonged to a creature it no longer knew.
 	bool known;
-	uint32_t removedKnown;
+	uint32_t removedKnown = 0;
 	checkCreatureAsKnown(creature->getID(), known, removedKnown);
 	AddCreature(msg, creature, false, removedKnown);
 
@@ -2897,14 +2960,8 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 		msg.addString(creature->getName());
 	}
 
-	if (creature->isHealthHidden()) {
-		msg.addByte(0x00);
-	} else {
-		msg.addByte(std::ceil(
-		    (static_cast<double>(creature->getHealth()) / std::max<int32_t>(creature->getMaxHealth(), 1)) * 100));
-	}
-
-	msg.addByte(creature->getDirection());
+	msg.addByte(creatureHealthPercent(creature));
+	msg.addByte(clientDirection(creature->getDirection()));
 
 	// TFS describes a ghost or invisible creature with a zeroed outfit — an 8.x+
 	// idea, where it means "draw nothing". On the 7.x wire that zero is a
@@ -2919,10 +2976,10 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 	msg.addByte(player->isAccessPlayer() ? 0xFF : lightInfo.level);
 	msg.addByte(lightInfo.color);
 
-	msg.add<uint16_t>(creature->getStepSpeed());
+	msg.add<uint16_t>(clientSpeed(creature->getStepSpeed()));
 
-	msg.addByte(player->getSkullClient(creature));
-	msg.addByte(player->getPartyShield(otherPlayer));
+	msg.addByte(clientSkull(player->getSkullClient(creature)));
+	msg.addByte(clientPartyShield(player->getPartyShield(otherPlayer)));
 }
 
 void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
