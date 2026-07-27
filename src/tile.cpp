@@ -1229,9 +1229,10 @@ int32_t Tile::getClientIndexOfCreature(const Player* player, const Creature* cre
 		n += items->getTopItemCount();
 	}
 
+	// Newest creature first, the order ProtocolGame::GetTileDescription put them
+	// on the wire in — see the comment there.
 	if (const CreatureVector* creatures = getCreatures()) {
-		for (auto it = creatures->rbegin(), end = creatures->rend(); it != end; ++it) {
-			const Creature* c = (*it);
+		for (const Creature* c : *creatures) {
 			if (c == creature) {
 				return n;
 			} else if (player->canSeeCreature(c)) {

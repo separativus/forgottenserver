@@ -735,10 +735,18 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 		}
 	}
 
+	// Creatures go out newest first. Tile::addThing puts an arriving creature at
+	// the front of the vector, and the 7.x client stacks it there too: the 7.6
+	// engine described a tile with creatures.begin()..end() and addressed one
+	// with the very same index (tile.cpp getThingStackPos / getThingByStackPos).
+	// CipSoft flipped that later, which is why stock TFS walks the vector
+	// backwards. On this wire the reverse order only agrees while a tile holds a
+	// single creature; the moment a second one shares it — /goto puts a god on a
+	// player — every stackpos after it is off by one and the client acts on the
+	// wrong creature. Keep this in step with Tile::getClientIndexOfCreature.
 	const CreatureVector* creatures = tile->getCreatures();
 	if (creatures) {
-		for (auto it = creatures->rbegin(), end = creatures->rend(); it != end; ++it) {
-			const Creature* creature = (*it);
+		for (const Creature* creature : *creatures) {
 			if (!player->canSeeCreature(creature)) {
 				continue;
 			}
