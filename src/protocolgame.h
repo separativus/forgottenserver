@@ -300,8 +300,6 @@ private:
 
 	// tiles
 	static void RemoveTileThing(NetworkMessage& msg, const Position& pos, uint32_t stackpos);
-	static void RemoveTileCreature(NetworkMessage& msg, const Creature* creature, const Position& pos,
-	                               uint32_t stackpos);
 
 	void MoveUpCreature(NetworkMessage& msg, const Creature* creature, const Position& newPos, const Position& oldPos);
 	void MoveDownCreature(NetworkMessage& msg, const Creature* creature, const Position& newPos,
