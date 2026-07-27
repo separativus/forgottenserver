@@ -724,13 +724,18 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 		count = 0;
 	}
 
+	// A tile is worth MAX_STACKPOS objects to the client and not one more — the
+	// 7.6 engine guarded every one of these loops with the same count (its
+	// protocol76.cpp), so an eleventh thing was simply not described. Creatures
+	// are the ones that get there: enough of them share a tile after a pile-up
+	// or a god pulling people together.
 	const TileItemVector* items = tile->getItemList();
 	if (items) {
 		for (auto it = items->getBeginTopItem(), end = items->getEndTopItem(); it != end; ++it) {
 			msg.addItem(*it);
 
 			if (++count == MAX_STACKPOS) {
-				break;
+				return;
 			}
 		}
 	}
@@ -755,7 +760,10 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 			uint32_t removedKnown;
 			checkCreatureAsKnown(creature->getID(), known, removedKnown);
 			AddCreature(msg, creature, known, removedKnown);
-			++count;
+
+			if (++count == MAX_STACKPOS) {
+				return;
+			}
 		}
 	}
 
