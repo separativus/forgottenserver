@@ -684,6 +684,12 @@ void Container::internalAddThing(Thing* thing) { internalAddThing(0, thing); }
 
 void Container::internalAddThing(uint32_t, Thing* thing)
 {
+	// Item::CreateItem returns nullptr for an id this items.otb does not know,
+	// and callers hand that straight to us (Player::getDepotLocker did).
+	if (!thing) {
+		return;
+	}
+
 	Item* item = thing->getItem();
 	if (!item) {
 		return;

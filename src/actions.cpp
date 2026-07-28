@@ -8,6 +8,7 @@
 #include "bed.h"
 #include "configmanager.h"
 #include "container.h"
+#include "depotchest.h"
 #include "game.h"
 #include "housetile.h"
 #include "pugicast.h"
@@ -346,9 +347,28 @@ ReturnValue Actions::internalUseItem(Player* player, const Position& pos, uint8_
 
 		// depot container
 		if (DepotLocker* depot = container->getDepotLocker()) {
-			DepotLocker& myDepotLocker = player->getDepotLocker();
-			myDepotLocker.setParent(depot->getParent()->getTile());
-			openContainer = &myDepotLocker;
+			if (!Item::items.hasDepotBoxes()) {
+				// locker -> chest -> twenty numbered boxes is a 10.x layout, and
+				// an item set without those boxes cannot draw two of its three
+				// levels. Open what the era expects instead: the player's own
+				// depot for this town, one container, items in it.
+				DepotChest* depotChest = player->getDepotChest(depot->getDepotId(), true);
+				if (!depotChest) {
+					return RETURNVALUE_NOTPOSSIBLE;
+				}
+
+				// The chest hangs under the locker standing on the map, not under
+				// the tile: DepotChest::getParent() reports its parent's parent,
+				// so this is what puts the tile at the end of the chain — the
+				// same shape the nested layout builds, and what every move in and
+				// out of the depot walks up to reach the world.
+				depotChest->setParent(depot);
+				openContainer = depotChest;
+			} else {
+				DepotLocker& myDepotLocker = player->getDepotLocker();
+				myDepotLocker.setParent(depot->getParent()->getTile());
+				openContainer = &myDepotLocker;
+			}
 		} else {
 			openContainer = container;
 		}

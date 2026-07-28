@@ -828,6 +828,14 @@ DepotChest* Player::getDepotChest(uint32_t depotId, bool autoCreate)
 		return nullptr;
 	}
 
+	// Without the numbered boxes the storage wears the id the era does have for
+	// it; sending a box the client cannot draw ends the session on
+	// "Objects.cpp 267: assertion failed (Type = 0)". Only the look changes —
+	// the contents, the depot id and the save path are the same either way.
+	if (!Item::items.hasDepotBoxes()) {
+		depotItemId = ITEM_DEPOT;
+	}
+
 	it = depotChests.emplace(depotId, new DepotChest(depotItemId)).first;
 	it->second->setMaxDepotItems(getMaxDepotItems());
 	return it->second;
@@ -837,8 +845,19 @@ DepotLocker& Player::getDepotLocker()
 {
 	if (!depotLocker) {
 		depotLocker = std::make_shared<DepotLocker>(ITEM_LOCKER);
-		depotLocker->internalAddThing(Item::CreateItem(ITEM_MARKET));
-		depotLocker->internalAddThing(inbox);
+		// The market stall (14405) and the mail inbox (14404) are 8.x ids. A 7.x
+		// items.otb stops at 5089, so Item::CreateItem hands back a nullptr for
+		// the market — which internalAddThing used to dereference, killing the
+		// server the first time anyone right-clicked a depot — and the inbox
+		// would reach the client as an item with client id 0, the assert that
+		// ends a 7.x session. Neither has a window in this protocol anyway, so
+		// the locker holds what the era knows: the depot chest.
+		if (Item* market = Item::CreateItem(ITEM_MARKET)) {
+			depotLocker->internalAddThing(market);
+		}
+		if (Item::items[ITEM_INBOX].id != 0) {
+			depotLocker->internalAddThing(inbox);
+		}
 
 		DepotChest* depotChest = new DepotChest(ITEM_DEPOT, false);
 		// adding in reverse to align them from first to last
