@@ -8,6 +8,7 @@
 #include "bed.h"
 #include "configmanager.h"
 #include "container.h"
+#include "depotchest.h"
 #include "game.h"
 #include "housetile.h"
 #include "pugicast.h"
@@ -346,9 +347,23 @@ ReturnValue Actions::internalUseItem(Player* player, const Position& pos, uint8_
 
 		// depot container
 		if (DepotLocker* depot = container->getDepotLocker()) {
-			DepotLocker& myDepotLocker = player->getDepotLocker();
-			myDepotLocker.setParent(depot->getParent()->getTile());
-			openContainer = &myDepotLocker;
+			if (Item::items[ITEM_DEPOT_BOX_I].id == 0) {
+				// locker -> chest -> twenty numbered boxes is a 10.x layout, and
+				// an item set without those boxes cannot draw two of its three
+				// levels. Open what the 7.x client expects instead: the player's
+				// own depot for this town, one container, items in it.
+				DepotChest* depotChest = player->getDepotChest(depot->getDepotId(), true);
+				if (!depotChest) {
+					return RETURNVALUE_NOTPOSSIBLE;
+				}
+
+				depotChest->setParent(depot->getParent()->getTile());
+				openContainer = depotChest;
+			} else {
+				DepotLocker& myDepotLocker = player->getDepotLocker();
+				myDepotLocker.setParent(depot->getParent()->getTile());
+				openContainer = &myDepotLocker;
+			}
 		} else {
 			openContainer = container;
 		}
