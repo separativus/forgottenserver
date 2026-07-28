@@ -443,6 +443,13 @@ public:
 
 	uint16_t getItemIdByName(const std::string& name);
 
+	// The numbered depot boxes are 10.x ids (25453 and up). An item set without
+	// them cannot draw the locker/chest/box layout at all — the boxes would
+	// reach the client as item id 0 — so the depot falls back to the flat one
+	// the era used: one chest per town, opened directly. See
+	// Player::getDepotChest and Actions::internalUseItem.
+	bool hasDepotBoxes() const { return getItemType(ITEM_DEPOT_BOX_I).id != 0; }
+
 	uint32_t majorVersion = 0;
 	uint32_t minorVersion = 0;
 	uint32_t buildNumber = 0;

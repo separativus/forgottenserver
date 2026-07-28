@@ -828,12 +828,11 @@ DepotChest* Player::getDepotChest(uint32_t depotId, bool autoCreate)
 		return nullptr;
 	}
 
-	// The numbered depot boxes are 10.x ids (25453 and up). An item set that
-	// does not have them would send the box to the client as client id 0 —
-	// "Objects.cpp 267: assertion failed (Type = 0)" — so the storage wears the
-	// id the era does have for it. Only the look changes; the contents, the
-	// depot id and the save path are the same either way.
-	if (Item::items[depotItemId].id == 0) {
+	// Without the numbered boxes the storage wears the id the era does have for
+	// it; sending a box the client cannot draw ends the session on
+	// "Objects.cpp 267: assertion failed (Type = 0)". Only the look changes —
+	// the contents, the depot id and the save path are the same either way.
+	if (!Item::items.hasDepotBoxes()) {
 		depotItemId = ITEM_DEPOT;
 	}
 
