@@ -71,11 +71,17 @@ void sighupHandler()
 	Npcs::reload();
 	std::cout << "Reloaded npcs." << std::endl;
 
-	g_monsters.reload();
-	std::cout << "Reloaded monsters." << std::endl;
-
+	// Spells before monsters: a monster's `<attack script="…">` is loaded into
+	// the spell interface (Monsters::deserializeSpell -> CombatSpell::loadScript),
+	// and reloading spells throws that Lua state away (BaseEvents::reload ->
+	// clear -> reInitState). The other way round every scripted monster attack
+	// is left calling a nil value. Game::reload keeps the same order for
+	// RELOAD_TYPE_SPELLS and RELOAD_TYPE_ALL.
 	g_spells->reload();
 	std::cout << "Reloaded spells." << std::endl;
+
+	g_monsters.reload();
+	std::cout << "Reloaded monsters." << std::endl;
 
 	g_talkActions->reload();
 	std::cout << "Reloaded talk actions." << std::endl;
