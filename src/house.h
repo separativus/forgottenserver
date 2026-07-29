@@ -14,6 +14,18 @@ class House;
 class HouseTile;
 class Player;
 
+namespace tfs::house {
+
+/// The storage key of a `%<key>` house access-list line, if the line is one.
+///
+/// Such a line invites every player whose storage `key` is set above zero,
+/// instead of naming players one by one. Name lists stop after 99 usable lines
+/// (see AccessList::parseList), which is too few to hold a whole playerbase —
+/// the donation zone is gated this way.
+std::optional<uint32_t> parseStorageToken(std::string_view line);
+
+} // namespace tfs::house
+
 class AccessList
 {
 public:
@@ -30,6 +42,7 @@ private:
 	std::string list;
 	std::unordered_set<uint32_t> playerList;
 	std::unordered_set<uint32_t> guildRankList;
+	std::unordered_set<uint32_t> storageKeyList;
 	bool allowEveryone = false;
 };
 

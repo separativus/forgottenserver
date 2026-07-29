@@ -13,6 +13,8 @@
 #include "iologindata.h"
 #include "pugicast.h"
 
+#include <charconv>
+
 extern Game g_game;
 
 House::House(uint32_t houseId) : id(houseId) {}
@@ -371,10 +373,27 @@ bool House::executeTransfer(HouseTransferItem* item, Player* newOwner)
 	return true;
 }
 
+std::optional<uint32_t> tfs::house::parseStorageToken(std::string_view line)
+{
+	if (line.size() < 2 || line.front() != '%') {
+		return std::nullopt;
+	}
+
+	uint32_t key = 0;
+	const char* first = line.data() + 1;
+	const char* last = line.data() + line.size();
+	auto [ptr, ec] = std::from_chars(first, last, key);
+	if (ec != std::errc{} || ptr != last) {
+		return std::nullopt;
+	}
+	return key;
+}
+
 void AccessList::parseList(std::string_view list)
 {
 	playerList.clear();
 	guildRankList.clear();
+	storageKeyList.clear();
 	allowEveryone = false;
 	this->list = list;
 	if (list.empty()) {
@@ -397,6 +416,14 @@ void AccessList::parseList(std::string_view list)
 		}
 
 		boost::algorithm::to_lower(line);
+
+		if (line.front() == '%') {
+			// storage token: a malformed one is never a player name
+			if (auto key = tfs::house::parseStorageToken(line)) {
+				storageKeyList.insert(*key);
+			}
+			continue;
+		}
 
 		std::string::size_type at_pos = line.find("@");
 		if (at_pos != std::string::npos) {
@@ -477,7 +504,16 @@ bool AccessList::isInList(const Player* player) const
 	}
 
 	const auto& rank = player->getGuildRank();
-	return rank && guildRankList.find(rank->id) != guildRankList.end();
+	if (rank && guildRankList.find(rank->id) != guildRankList.end()) {
+		return true;
+	}
+
+	for (uint32_t key : storageKeyList) {
+		if (auto value = player->getStorageValue(key); value && *value > 0) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void AccessList::getList(std::string& list) const { list = this->list; }
