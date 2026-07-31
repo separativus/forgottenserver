@@ -4622,8 +4622,16 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 		realManaChange = targetPlayer->getMana() - realManaChange;
 
 		if (realManaChange > 0 && !targetPlayer->isInGhostMode()) {
-			targetPlayer->sendTextMessage(MESSAGE_EVENT_DEFAULT,
-			                              "You gained " + std::to_string(realManaChange) + " mana.");
+			// 7.x shows mana gain as a rising blue number, not a server log line
+			const Position& targetPos = targetPlayer->getPosition();
+			ColoredText coloredText(std::to_string(realManaChange), targetPos, TEXTCOLOR_BLUE);
+
+			SpectatorVec spectators;
+			map.getSpectators(spectators, targetPos, false, true);
+			for (Creature* spectator : spectators) {
+				assert(dynamic_cast<Player*>(spectator) != nullptr);
+				static_cast<Player*>(spectator)->sendColoredText(coloredText);
+			}
 		}
 	} else {
 		const Position& targetPos = target->getPosition();
