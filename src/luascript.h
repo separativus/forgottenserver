@@ -325,6 +325,7 @@ private:
 
 	static int luaPositionSendMagicEffect(lua_State* L);
 	static int luaPositionSendDistanceEffect(lua_State* L);
+	static int luaPositionSendAnimatedText(lua_State* L);
 
 	// Tile
 	static int luaTileCreate(lua_State* L);
