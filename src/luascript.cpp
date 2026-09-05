@@ -2433,6 +2433,7 @@ void LuaScriptInterface::registerFunctions()
 
 	registerMethod(L, "Position", "sendMagicEffect", LuaScriptInterface::luaPositionSendMagicEffect);
 	registerMethod(L, "Position", "sendDistanceEffect", LuaScriptInterface::luaPositionSendDistanceEffect);
+	registerMethod(L, "Position", "sendAnimatedText", LuaScriptInterface::luaPositionSendAnimatedText);
 
 	// Tile
 	registerClass(L, "Tile", "", LuaScriptInterface::luaTileCreate);
@@ -5336,6 +5337,38 @@ int LuaScriptInterface::luaPositionSendDistanceEffect(lua_State* L)
 		g_game.addDistanceEffect(position, positionEx, distanceEffect);
 	}
 
+	tfs::lua::pushBoolean(L, true);
+	return 1;
+}
+
+int LuaScriptInterface::luaPositionSendAnimatedText(lua_State* L)
+{
+	// position:sendAnimatedText(text[, color = TEXTCOLOR_WHITE_EXP[, player = nullptr]])
+	// 7.x animated text (0x84): the floating words the old servers used for map
+	// labels and level-ups — the packet the exp/mana numbers already take.
+	const Position& position = tfs::lua::getPosition(L, 1);
+	const std::string& text = tfs::lua::getString(L, 2);
+	TextColor_t color = tfs::lua::getNumber<TextColor_t>(L, 3, TEXTCOLOR_WHITE_EXP);
+	if (text.empty()) {
+		tfs::lua::pushBoolean(L, false);
+		return 1;
+	}
+
+	SpectatorVec spectators;
+	if (lua_gettop(L) >= 4) {
+		if (Player* player = tfs::lua::getPlayer(L, 4)) {
+			spectators.emplace_back(player);
+		}
+	} else {
+		g_game.map.getSpectators(spectators, position, true, true);
+	}
+
+	ColoredText coloredText(text, position, color);
+	for (Creature* spectator : spectators) {
+		if (Player* player = spectator->getPlayer()) {
+			player->sendColoredText(coloredText);
+		}
+	}
 	tfs::lua::pushBoolean(L, true);
 	return 1;
 }
