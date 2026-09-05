@@ -309,6 +309,12 @@ std::string Npc::getDescription(int32_t) const
 
 void Npc::loadNpcTypeInfo()
 {
+	// The spawn name only says which data/npc/<name>.xml to open; what the
+	// player sees is the file's name attribute (TFS 1.4 behaviour), so several
+	// files may present the same NPC — one per world with its own sail targets.
+	if (!npcType->name.empty()) {
+		name = npcType->name;
+	}
 	speechBubble = npcType->speechBubble;
 	walkTicks = npcType->walkTicks;
 	baseSpeed = npcType->baseSpeed;
