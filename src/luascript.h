@@ -628,7 +628,6 @@ private:
 	static int luaPlayerGetFreeCapacity(lua_State* L);
 
 	static int luaPlayerGetDepotChest(lua_State* L);
-	static int luaPlayerGetInbox(lua_State* L);
 
 	static int luaPlayerGetSkullTime(lua_State* L);
 	static int luaPlayerSetSkullTime(lua_State* L);
@@ -782,8 +781,6 @@ private:
 	static int luaPlayerHasChaseMode(lua_State* L);
 	static int luaPlayerHasSecureMode(lua_State* L);
 	static int luaPlayerGetFightMode(lua_State* L);
-
-	static int luaPlayerGetStoreInbox(lua_State* L);
 
 	static int luaPlayerIsNearDepotBox(lua_State* L);
 
@@ -1050,9 +1047,6 @@ private:
 	static int luaItemTypeGetVocationString(lua_State* L);
 	static int luaItemTypeGetMinReqLevel(lua_State* L);
 	static int luaItemTypeGetMinReqMagicLevel(lua_State* L);
-
-	static int luaItemTypeGetMarketBuyStatistics(lua_State* L);
-	static int luaItemTypeGetMarketSellStatistics(lua_State* L);
 
 	static int luaItemTypeHasSubType(lua_State* L);
 

@@ -5,8 +5,6 @@
 #define FS_CONST_H
 
 static constexpr int32_t NETWORKMESSAGE_MAXSIZE = 24590;
-static constexpr int32_t MIN_MARKET_FEE = 20;
-static constexpr int32_t MAX_MARKET_FEE = 100000;
 
 enum MagicEffectsType_t : uint8_t
 {
@@ -520,6 +518,7 @@ enum item_t : uint16_t
 	ITEM_WILDGROWTH_NOPVP = 20670,
 
 	ITEM_BAG = 1987,
+	ITEM_BACKPACK = 1988,
 	ITEM_SHOPPING_BAG = 23782,
 
 	ITEM_GOLD_COIN = 2148,
@@ -529,9 +528,6 @@ enum item_t : uint16_t
 
 	ITEM_DEPOT = 2594,
 	ITEM_LOCKER = 2589,
-	ITEM_INBOX = 14404,
-	ITEM_MARKET = 14405,
-	ITEM_STORE_INBOX = 26052,
 
 	// move to separate enum class?
 	ITEM_DEPOT_BOX_I = 25453,

@@ -27,11 +27,9 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/guild.cpp
 	${CMAKE_CURRENT_LIST_DIR}/house.cpp
 	${CMAKE_CURRENT_LIST_DIR}/housetile.cpp
-	${CMAKE_CURRENT_LIST_DIR}/inbox.cpp
 	${CMAKE_CURRENT_LIST_DIR}/iologindata.cpp
 	${CMAKE_CURRENT_LIST_DIR}/iomap.cpp
 	${CMAKE_CURRENT_LIST_DIR}/iomapserialize.cpp
-	${CMAKE_CURRENT_LIST_DIR}/iomarket.cpp
 	${CMAKE_CURRENT_LIST_DIR}/item.cpp
 	${CMAKE_CURRENT_LIST_DIR}/items.cpp
 	${CMAKE_CURRENT_LIST_DIR}/luascript.cpp
@@ -63,7 +61,6 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/signals.cpp
 	${CMAKE_CURRENT_LIST_DIR}/spawn.cpp
 	${CMAKE_CURRENT_LIST_DIR}/spells.cpp
-	${CMAKE_CURRENT_LIST_DIR}/storeinbox.cpp
 	${CMAKE_CURRENT_LIST_DIR}/talkaction.cpp
 	${CMAKE_CURRENT_LIST_DIR}/tasks.cpp
 	${CMAKE_CURRENT_LIST_DIR}/teleport.cpp
@@ -110,11 +107,9 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/guild.h
 	${CMAKE_CURRENT_LIST_DIR}/house.h
 	${CMAKE_CURRENT_LIST_DIR}/housetile.h
-	${CMAKE_CURRENT_LIST_DIR}/inbox.h
 	${CMAKE_CURRENT_LIST_DIR}/iologindata.h
 	${CMAKE_CURRENT_LIST_DIR}/iomap.h
 	${CMAKE_CURRENT_LIST_DIR}/iomapserialize.h
-	${CMAKE_CURRENT_LIST_DIR}/iomarket.h
 	${CMAKE_CURRENT_LIST_DIR}/item.h
 	${CMAKE_CURRENT_LIST_DIR}/itemloader.h
 	${CMAKE_CURRENT_LIST_DIR}/items.h
@@ -151,7 +146,6 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/spawn.h
 	${CMAKE_CURRENT_LIST_DIR}/spectators.h
 	${CMAKE_CURRENT_LIST_DIR}/spells.h
-	${CMAKE_CURRENT_LIST_DIR}/storeinbox.h
 	${CMAKE_CURRENT_LIST_DIR}/talkaction.h
 	${CMAKE_CURRENT_LIST_DIR}/tasks.h
 	${CMAKE_CURRENT_LIST_DIR}/teleport.h
