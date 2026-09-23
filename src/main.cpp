@@ -4,6 +4,8 @@
 #include "otserv.h"
 #include "tools.h"
 
+#include <cstdio>
+
 static bool argumentsHandler(const std::vector<std::string_view>& args)
 {
 	for (const auto& arg : args) {
@@ -38,6 +40,9 @@ static bool argumentsHandler(const std::vector<std::string_view>& args)
 
 int main(int argc, const char** argv)
 {
+	// stdout is a pipe under docker: line-buffer it so "\n"-terminated output (Lua errors, print) is not held back
+	std::setvbuf(stdout, nullptr, _IOLBF, 0);
+
 	std::vector<std::string_view> args(argv, argv + argc);
 	if (!argumentsHandler(args)) {
 		return 1;
