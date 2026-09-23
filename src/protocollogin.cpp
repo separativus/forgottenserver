@@ -128,19 +128,9 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	// The 7.6 client predates the RSA/XTEA handshake (encryption was
 	// introduced with 7.61), so a 760 login stays plaintext end-to-end; the
 	// account number and password follow the signatures directly.
-	if (version > 760) {
-		if (!Protocol::RSA_decrypt(msg)) {
-			disconnect();
-			return;
-		}
-
-		xtea::key key;
-		key[0] = msg.get<uint32_t>();
-		key[1] = msg.get<uint32_t>();
-		key[2] = msg.get<uint32_t>();
-		key[3] = msg.get<uint32_t>();
-		enableXTEAEncryption();
-		setXTEAKey(key);
+	if (!readXTEAKey(msg, version)) {
+		disconnect();
+		return;
 	}
 
 	if (version > CLIENT_VERSION_MAX) {

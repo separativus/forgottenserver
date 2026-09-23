@@ -11,7 +11,6 @@
 #include "game.h"
 #include "house.h"
 #include "mailbox.h"
-#include "podium.h"
 #include "teleport.h"
 #include "trashholder.h"
 
@@ -54,8 +53,6 @@ Item* Item::CreateItem(const uint16_t type, uint16_t count /*= 0*/)
 			newItem = new Mailbox(type);
 		} else if (it.isBed()) {
 			newItem = new BedItem(type);
-		} else if (it.isPodium()) {
-			newItem = new Podium(type);
 		} else {
 			newItem = new Item(type, count);
 		}
@@ -680,7 +677,7 @@ Attr_ReadValue Item::readAttr(AttrTypes_t attr, PropStream& propStream)
 			break;
 		}
 
-		// Podium class
+		// Podium (12.x; a 7.x item set has none, the outfit is skipped)
 		case ATTR_PODIUMOUTFIT: {
 			if (!propStream.skip(15)) {
 				return ATTR_READ_ERROR;

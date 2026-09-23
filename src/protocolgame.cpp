@@ -15,7 +15,6 @@
 #include "outfit.h"
 #include "outputmessage.h"
 #include "player.h"
-#include "podium.h"
 #include "scheduler.h"
 
 extern CreatureEvents* g_creatureEvents;
@@ -322,7 +321,6 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	player->incrementReferenceCounter();
 
 	g_chat->removeUserFromAllChannels(*player);
-	player->clearModalWindows();
 	player->setOperatingSystem(operatingSystem);
 	player->isConnecting = false;
 
@@ -412,19 +410,9 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 		return;
 	}
 
-	if (version > 760) {
-		if (!Protocol::RSA_decrypt(msg)) {
-			disconnect();
-			return;
-		}
-
-		xtea::key key;
-		key[0] = msg.get<uint32_t>();
-		key[1] = msg.get<uint32_t>();
-		key[2] = msg.get<uint32_t>();
-		key[3] = msg.get<uint32_t>();
-		enableXTEAEncryption();
-		setXTEAKey(key);
+	if (!readXTEAKey(msg, version)) {
+		disconnect();
+		return;
 	}
 
 	if (version > CLIENT_VERSION_MAX) {
@@ -528,9 +516,6 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 		case 0x14:
 			g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->logout(true, false); });
 			break;
-		case 0x1D:
-			g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerReceivePingBack(playerID); });
-			break;
 		case 0x1E:
 			g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerReceivePing(playerID); });
 			break;
@@ -587,9 +572,6 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			g_dispatcher.addTask(DISPATCHER_TASK_EXPIRATION,
 			                     [playerID = player->getID()]() { g_game.playerTurn(playerID, DIRECTION_WEST); });
 			break;
-		case 0x77:
-			parseEquipObject(msg);
-			break;
 		case 0x78:
 			parseThrow(msg);
 			break;
@@ -640,9 +622,6 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			break;
 		case 0x8A:
 			parseHouseWindow(msg);
-			break;
-		case 0x8B:
-			parseWrapItem(msg);
 			break;
 		case 0x8C:
 			parseLookAt(msg);
@@ -719,9 +698,6 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			break;
 		case 0xCA:
 			parseUpdateContainer(msg);
-			break;
-		case 0xCC:
-			parseSeekInContainer(msg);
 			break;
 		// case 0xCD: break; // request inspect window
 		case 0xD2:
@@ -1074,7 +1050,7 @@ void ProtocolGame::parseSetOutfit(NetworkMessage& msg)
 	newOutfit.lookFeet = msg.getByte();
 
 	g_dispatcher.addTask(
-	    [=, playerID = player->getID()]() { g_game.playerChangeOutfit(playerID, newOutfit, false); });
+	    [=, playerID = player->getID()]() { g_game.playerChangeOutfit(playerID, newOutfit); });
 }
 
 void ProtocolGame::parseUseItem(NetworkMessage& msg)
@@ -1234,16 +1210,6 @@ void ProtocolGame::parseFollow(NetworkMessage& msg)
 	g_dispatcher.addTask([=, playerID = player->getID()]() { g_game.playerFollowCreature(playerID, creatureID); });
 }
 
-void ProtocolGame::parseEquipObject(NetworkMessage& msg)
-{
-	// hotkey equip (?)
-	uint16_t spriteID = msg.get<uint16_t>();
-	// msg.get<uint8_t>(); // bool smartMode (?)
-
-	g_dispatcher.addTask(DISPATCHER_TASK_EXPIRATION,
-	                     [=, playerID = player->getID()]() { g_game.playerEquipItem(playerID, spriteID); });
-}
-
 void ProtocolGame::parseTextWindow(NetworkMessage& msg)
 {
 	uint32_t windowTextID = msg.get<uint32_t>();
@@ -1260,16 +1226,6 @@ void ProtocolGame::parseHouseWindow(NetworkMessage& msg)
 	auto text = msg.getString();
 	g_dispatcher.addTask([=, playerID = player->getID(), text = std::string{text}]() {
 		g_game.playerUpdateHouseWindow(playerID, doorId, id, text);
-	});
-}
-
-void ProtocolGame::parseWrapItem(NetworkMessage& msg)
-{
-	Position pos = msg.getPosition();
-	uint16_t spriteId = msg.get<uint16_t>();
-	uint8_t stackpos = msg.getByte();
-	g_dispatcher.addTask(DISPATCHER_TASK_EXPIRATION, [=, playerID = player->getID()]() {
-		g_game.playerWrapItem(playerID, pos, stackpos, spriteId);
 	});
 }
 
@@ -1441,27 +1397,10 @@ void ProtocolGame::parseEnableSharedPartyExperience(NetworkMessage& msg)
 	    [=, playerID = player->getID()]() { g_game.playerEnableSharedPartyExperience(playerID, sharedExpActive); });
 }
 
-void ProtocolGame::parseModalWindowAnswer(NetworkMessage& msg)
-{
-	uint32_t id = msg.get<uint32_t>();
-	uint8_t button = msg.getByte();
-	uint8_t choice = msg.getByte();
-	g_dispatcher.addTask(
-	    [=, playerID = player->getID()]() { g_game.playerAnswerModalWindow(playerID, id, button, choice); });
-}
-
 void ProtocolGame::parseBrowseField(NetworkMessage& msg)
 {
 	Position pos = msg.getPosition();
 	g_dispatcher.addTask([=, playerID = player->getID()]() { g_game.playerBrowseField(playerID, pos); });
-}
-
-void ProtocolGame::parseSeekInContainer(NetworkMessage& msg)
-{
-	uint8_t containerId = msg.getByte();
-	uint16_t index = msg.get<uint16_t>();
-	g_dispatcher.addTask(
-	    [=, playerID = player->getID()]() { g_game.playerSeekInContainer(playerID, containerId, index); });
 }
 
 // Send methods
@@ -1550,22 +1489,14 @@ void ProtocolGame::sendCreatureSquare(const Creature* creature, SquareColor_t co
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendTutorial(uint8_t tutorialId)
+void ProtocolGame::sendTutorial(uint8_t)
 {
-	NetworkMessage msg;
-	msg.addByte(0xDC);
-	msg.addByte(tutorialId);
-	writeToOutputBuffer(msg);
+	// 0xDC tutorial hints are unknown to the 7.x client.
 }
 
-void ProtocolGame::sendAddMarker(const Position& pos, uint8_t markType, const std::string& desc)
+void ProtocolGame::sendAddMarker(const Position&, uint8_t, const std::string&)
 {
-	NetworkMessage msg;
-	msg.addByte(0xDD);
-	msg.addPosition(pos);
-	msg.addByte(markType);
-	msg.addString(desc);
-	writeToOutputBuffer(msg);
+	// 0xDD minimap marks are unknown to the 7.x client.
 }
 
 void ProtocolGame::sendReLoginWindow(uint8_t)
@@ -1913,19 +1844,22 @@ void ProtocolGame::sendCreatureTurn(const Creature* creature, uint32_t stackpos)
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendCreatureSay(const Creature* creature, SpeakClasses type, const std::string& text,
-                                   const Position* pos /* = nullptr*/)
+void ProtocolGame::AddStatementId(NetworkMessage& msg)
 {
 	// The u32 statement id arrived with the 7.7 client; 7.6 expects the
 	// speaker name right away and desyncs on the extra dword.
-	NetworkMessage msg;
-	msg.addByte(0xAA);
-
 	static uint32_t statementId = 0;
 	if (version > 760) {
 		msg.add<uint32_t>(++statementId);
 	}
+}
 
+void ProtocolGame::sendCreatureSay(const Creature* creature, SpeakClasses type, const std::string& text,
+                                   const Position* pos /* = nullptr*/)
+{
+	NetworkMessage msg;
+	msg.addByte(0xAA);
+	AddStatementId(msg);
 	msg.addString(creature->getName());
 
 	msg.addByte(type);
@@ -1944,11 +1878,7 @@ void ProtocolGame::sendToChannel(const Creature* creature, SpeakClasses type, co
 {
 	NetworkMessage msg;
 	msg.addByte(0xAA);
-
-	static uint32_t statementId = 0;
-	if (version > 760) {
-		msg.add<uint32_t>(++statementId);
-	}
+	AddStatementId(msg);
 
 	if (!creature) {
 		msg.addString("");
@@ -1970,10 +1900,7 @@ void ProtocolGame::sendLogMessage(const std::string& text)
 	// stay available for events that should stand out.
 	NetworkMessage msg;
 	msg.addByte(0xAA);
-	static uint32_t statementId = 0;
-	if (version > 760) {
-		msg.add<uint32_t>(++statementId);
-	}
+	AddStatementId(msg);
 	msg.addString("");
 	msg.addByte(TALKTYPE_CHANNEL_O);
 	msg.add<uint16_t>(CHANNEL_LOG);
@@ -1989,10 +1916,7 @@ void ProtocolGame::sendPrivateMessageFrom(const Creature* speaker, const std::st
 
 	NetworkMessage msg;
 	msg.addByte(0xAA);
-	static uint32_t statementId = 0;
-	if (version > 760) {
-		msg.add<uint32_t>(++statementId);
-	}
+	AddStatementId(msg);
 	msg.addString(speaker->getName());
 	msg.addByte(TALKTYPE_PRIVATE);
 	msg.addString(text);
@@ -2003,10 +1927,7 @@ void ProtocolGame::sendPrivateMessage(const Player* speaker, SpeakClasses type, 
 {
 	NetworkMessage msg;
 	msg.addByte(0xAA);
-	static uint32_t statementId = 0;
-	if (version > 760) {
-		msg.add<uint32_t>(++statementId);
-	}
+	AddStatementId(msg);
 	if (speaker) {
 		msg.addString(speaker->getName());
 	} else {
@@ -2049,13 +1970,6 @@ void ProtocolGame::sendSkills()
 }
 
 void ProtocolGame::sendPing()
-{
-	NetworkMessage msg;
-	msg.addByte(0x1E);
-	writeToOutputBuffer(msg);
-}
-
-void ProtocolGame::sendPingBack()
 {
 	NetworkMessage msg;
 	msg.addByte(0x1E);
@@ -2561,11 +2475,6 @@ void ProtocolGame::sendOutfitWindow()
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendPodiumWindow(const Item*)
-{
-	// Podiums are unknown to the 7.6 client.
-}
-
 void ProtocolGame::sendUpdatedVIPStatus(uint32_t guid, VipStatus_t newStatus)
 {
 	// 7.x: 0xD3 = buddy went online, 0xD4 = buddy went offline; guid only.
@@ -2627,11 +2536,6 @@ void ProtocolGame::sendUseItemCooldown(uint32_t)
 void ProtocolGame::sendSupplyUsed(const uint16_t)
 {
 	// 0xCE supply-used is unknown to the 7.6 client.
-}
-
-void ProtocolGame::sendModalWindow(const ModalWindow&)
-{
-	// Modal windows are unknown to the 7.6 client.
 }
 
 ////////////// Add common messages

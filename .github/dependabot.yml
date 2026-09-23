@@ -4,8 +4,9 @@
 # mirror of otland/forgottenserver so it can always be fast-forwarded.
 #
 # Weekly, Monday morning, Berlin time, matching the other repositories on the
-# migration host. vcpkg has no dependabot ecosystem; the upstream
-# update-vcpkg.yml workflow is what moves that baseline.
+# migration host. vcpkg has no dependabot ecosystem, and no build of this
+# branch goes through vcpkg (ci-760.yml and the migration repo compile against
+# debian packages), so nothing moves vcpkg.json's baseline.
 version: 2
 
 updates:

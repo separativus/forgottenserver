@@ -1,30 +1,13 @@
 do
-	local worldTime = 0
-
-	function Game.getWorldTime() return worldTime end
-
-	function Game.setWorldTime(time)
-		worldTime = time
-
-		-- quarter-hourly update to client clock near the minimap
-		if worldTime % 15 == 0 then
-			for _, player in ipairs(Game.getPlayers()) do
-				player:sendWorldTime(worldTime)
-			end
-		end
+	-- The engine's clock (Game::updateWorldTime): a Tibian day per real hour,
+	-- in minutes since Tibian midnight.
+	function Game.getWorldTime()
+		local now = os.date("*t")
+		return math.floor((now.min * 60 + now.sec) / 2.5)
 	end
 
 	function Game.getFormattedWorldTime()
 		local worldTime = Game.getWorldTime()
-		local hours = math.floor(worldTime / 60)
-
-		local minutes = worldTime % 60
-		if minutes < 10 then
-			minutes = '0' .. minutes
-		end
-
-		minutes = math.floor(minutes)
-
-		return hours .. ':' .. minutes
+		return string.format("%d:%02d", math.floor(worldTime / 60), worldTime % 60)
 	end
 end

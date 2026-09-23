@@ -6,7 +6,6 @@
 
 #include "groups.h"
 #include "map.h"
-#include "mounts.h"
 #include "player.h"
 #include "position.h"
 #include "wildcardtree.h"
@@ -57,7 +56,6 @@ static constexpr int32_t RANGE_USE_ITEM_EX_INTERVAL = 400;
 static constexpr int32_t RANGE_USE_WITH_CREATURE_INTERVAL = 400;
 static constexpr int32_t RANGE_ROTATE_ITEM_INTERVAL = 400;
 static constexpr int32_t RANGE_BROWSE_FIELD_INTERVAL = 400;
-static constexpr int32_t RANGE_WRAP_ITEM_INTERVAL = 400;
 static constexpr int32_t RANGE_REQUEST_TRADE_INTERVAL = 400;
 
 static constexpr int32_t MAX_STACKPOS = 10;
@@ -72,7 +70,7 @@ static constexpr uint8_t ITEM_STACK_SIZE = 100;
 class Game
 {
 public:
-	Game();
+	Game() = default;
 
 	// non-copyable
 	Game(const Game&) = delete;
@@ -295,12 +293,11 @@ public:
 	void loadMotdNum();
 	void saveMotdNum() const;
 	uint32_t getMotdNum() const { return motdNum; }
-	void incrementMotdNum() { motdNum++; }
+	void updateMotdNum();
 
 	// 7.x world light is server-driven (the 1.6 Lua light lib is not part of
 	// the carried 7.72-era datapack).
 	LightInfo getWorldLightInfo() const { return {lightLevel, lightColor}; }
-	void setWorldLightInfo(LightInfo lightInfo);
 	int16_t getWorldTime() const { return worldTime; }
 	void updateWorldTime();
 
@@ -312,7 +309,6 @@ public:
 	void playerReportBug(uint32_t playerId, const std::string& message, const Position& position, uint8_t category);
 	void playerDebugAssert(uint32_t playerId, const std::string& assertLine, const std::string& date,
 	                       const std::string& description, const std::string& comment);
-	void playerAnswerModalWindow(uint32_t playerId, uint32_t modalWindowId, uint8_t button, uint8_t choice);
 	void playerReportRuleViolation(uint32_t playerId, const std::string& targetName, uint8_t reportType,
 	                               uint8_t reportReason, const std::string& comment, const std::string& translation);
 
@@ -332,7 +328,6 @@ public:
 	                              const Position& toPos, uint8_t count);
 	void playerMoveItem(Player* player, const Position& fromPos, uint16_t spriteId, uint8_t fromStackPos,
 	                    const Position& toPos, uint8_t count, Item* item, Cylinder* toCylinder);
-	void playerEquipItem(uint32_t playerId, uint16_t spriteId);
 	void playerMove(uint32_t playerId, Direction direction);
 	void playerCreatePrivateChannel(uint32_t playerId);
 	void playerChannelInvite(uint32_t playerId, const std::string& name);
@@ -343,7 +338,6 @@ public:
 	void playerOpenPrivateChannel(uint32_t playerId, std::string receiver);
 	void playerCloseNpcChannel(uint32_t playerId);
 	void playerReceivePing(uint32_t playerId);
-	void playerReceivePingBack(uint32_t playerId);
 	void playerAutoWalk(uint32_t playerId, const std::vector<Direction>& listDir);
 	void playerStopAutoWalk(uint32_t playerId);
 	void playerUseItemEx(uint32_t playerId, const Position& fromPos, uint8_t fromStackPos, uint16_t fromSpriteId,
@@ -357,9 +351,7 @@ public:
 	void playerRotateItem(uint32_t playerId, const Position& pos, uint8_t stackPos, const uint16_t spriteId);
 	void playerWriteItem(uint32_t playerId, uint32_t windowTextId, std::string_view text);
 	void playerBrowseField(uint32_t playerId, const Position& pos);
-	void playerSeekInContainer(uint32_t playerId, uint8_t containerId, uint16_t index);
 	void playerUpdateHouseWindow(uint32_t playerId, uint8_t listId, uint32_t windowTextId, const std::string& text);
-	void playerWrapItem(uint32_t playerId, const Position& position, uint8_t stackPos, const uint16_t spriteId);
 	void playerRequestTrade(uint32_t playerId, const Position& pos, uint8_t stackPos, uint32_t tradePlayerId,
 	                        uint16_t spriteId);
 	void playerAcceptTrade(uint32_t playerId);
@@ -383,20 +375,15 @@ public:
 	                          bool notify);
 	void playerTurn(uint32_t playerId, Direction dir);
 	void playerRequestOutfit(uint32_t playerId);
-	void playerRequestEditPodium(uint32_t playerId, const Position& position, uint8_t stackPos,
-	                             const uint16_t spriteId);
-	void playerEditPodium(uint32_t playerId, Outfit_t outfit, const Position& position, uint8_t stackPos,
-	                      const uint16_t spriteId, bool podiumVisible, Direction direction);
 	void playerSay(uint32_t playerId, uint16_t channelId, SpeakClasses type, const std::string& receiver,
 	               const std::string& text);
-	void playerChangeOutfit(uint32_t playerId, Outfit_t outfit, bool randomizeMount = false);
+	void playerChangeOutfit(uint32_t playerId, Outfit_t outfit);
 	void playerInviteToParty(uint32_t playerId, uint32_t invitedId);
 	void playerJoinParty(uint32_t playerId, uint32_t leaderId);
 	void playerRevokePartyInvitation(uint32_t playerId, uint32_t invitedId);
 	void playerPassPartyLeadership(uint32_t playerId, uint32_t newLeaderId);
 	void playerLeaveParty(uint32_t playerId);
 	void playerEnableSharedPartyExperience(uint32_t playerId, bool sharedExpActive);
-	void playerToggleMount(uint32_t playerId, bool mount);
 
 	void parsePlayerExtendedOpcode(uint32_t playerId, uint8_t opcode, const std::string& buffer);
 	void parsePlayerNetworkMessage(uint32_t playerId, uint8_t recvByte, NetworkMessage* msg);
@@ -450,8 +437,6 @@ public:
 
 	void startDecay(Item* item);
 
-	void sendOfflineTrainingDialog(Player* player);
-
 	const std::unordered_map<uint32_t, Player*>& getPlayers() const { return players; }
 	const std::map<uint32_t, Npc*>& getNpcs() const { return npcs; }
 	const std::map<uint32_t, Monster*>& getMonsters() const { return monsters; }
@@ -478,8 +463,6 @@ public:
 	void setBedSleeper(BedItem* bed, uint32_t guid);
 	void removeBedSleeper(uint32_t guid);
 
-	void updatePodium(Item* item);
-
 	Item* getUniqueItem(uint16_t uniqueId);
 	bool addUniqueItem(uint16_t uniqueId, Item* item);
 	void removeUniqueItem(uint16_t uniqueId);
@@ -488,7 +471,6 @@ public:
 
 	Groups groups;
 	Map map;
-	Mounts mounts;
 
 	std::forward_list<Item*> toDecayItems;
 
@@ -534,8 +516,6 @@ private:
 	std::map<uint32_t, BedItem*> bedSleepersMap;
 
 	std::unordered_set<Tile*> tilesToClean;
-
-	ModalWindow offlineTrainingWindow{std::numeric_limits<uint32_t>::max(), "Choose a Skill", "Please choose a skill:"};
 
 	GameState_t gameState = GAME_STATE_NORMAL;
 	WorldType_t worldType = WORLD_TYPE_PVP;

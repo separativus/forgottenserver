@@ -100,7 +100,6 @@ private:
 	void parseFightModes(NetworkMessage& msg);
 	void parseAttack(NetworkMessage& msg);
 	void parseFollow(NetworkMessage& msg);
-	void parseEquipObject(NetworkMessage& msg);
 
 	void parseBugReport(NetworkMessage& msg);
 	void parseDebugAssert(NetworkMessage& msg);
@@ -115,7 +114,6 @@ private:
 	void parseUpdateContainer(NetworkMessage& msg);
 	void parseTextWindow(NetworkMessage& msg);
 	void parseHouseWindow(NetworkMessage& msg);
-	void parseWrapItem(NetworkMessage& msg);
 
 	void parseLookInShop(NetworkMessage& msg);
 	void parsePlayerPurchase(NetworkMessage& msg);
@@ -127,10 +125,7 @@ private:
 	void parsePassPartyLeadership(NetworkMessage& msg);
 	void parseEnableSharedPartyExperience(NetworkMessage& msg);
 
-	void parseModalWindowAnswer(NetworkMessage& msg);
-
 	void parseBrowseField(NetworkMessage& msg);
-	void parseSeekInContainer(NetworkMessage& msg);
 
 	// trade methods
 	void parseRequestTrade(NetworkMessage& msg);
@@ -173,7 +168,6 @@ private:
 	void sendCreatureHealth(const Creature* creature);
 	void sendSkills();
 	void sendPing();
-	void sendPingBack();
 	void sendCreatureTurn(const Creature* creature, uint32_t stackpos);
 	void sendCreatureSay(const Creature* creature, SpeakClasses type, const std::string& text,
 	                     const Position* pos = nullptr);
@@ -209,8 +203,6 @@ private:
 	void sendCombatAnalyzer(CombatType_t type, int32_t amount, DamageAnalyzerImpactType impactType,
 	                        const std::string& target);
 	void sendOutfitWindow();
-
-	void sendPodiumWindow(const Item* item);
 
 	void sendUpdatedVIPStatus(uint32_t guid, VipStatus_t newStatus);
 	void sendVIP(uint32_t guid, const std::string& name, const std::string& description, uint32_t icon, bool notify,
@@ -261,7 +253,6 @@ private:
 	void sendItems();
 
 	// messages
-	void sendModalWindow(const ModalWindow& modalWindow);
 
 	// session end
 
@@ -279,6 +270,7 @@ private:
 
 	void AddCreature(NetworkMessage& msg, const Creature* creature, bool known, uint32_t remove);
 	void AddPlayerStats(NetworkMessage& msg);
+	void AddStatementId(NetworkMessage& msg);
 	void AddOutfit(NetworkMessage& msg, const Outfit_t& outfit);
 	void AddPlayerSkills(NetworkMessage& msg);
 	void AddWorldLight(NetworkMessage& msg, LightInfo lightInfo);
