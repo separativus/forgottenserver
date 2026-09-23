@@ -9,9 +9,22 @@
 
 #include <mysql/errmsg.h>
 
+// A lost connection is retried for this long before the query fails. From then on the database counts as down: queries
+// fail at once (a shutdown save is hundreds of queries) and one connection attempt per interval checks whether it is
+// back. A single attempt can block for half a minute by itself (docker's DNS for a stopped container).
+static constexpr auto RECONNECT_DEADLINE = std::chrono::seconds(30);
+static std::atomic<std::chrono::steady_clock::rep> databaseDownUntil{0}; // 0: not down
+
 static tfs::detail::Mysql_ptr connectToDatabase(const bool retryIfError)
 {
+	using clock = std::chrono::steady_clock;
+	const bool isDown = databaseDownUntil != 0;
+	if (retryIfError && isDown && clock::now().time_since_epoch().count() < databaseDownUntil) {
+		return nullptr;
+	}
+
 	bool isFirstAttemptToConnect = true;
+	const auto deadline = clock::now() + RECONNECT_DEADLINE;
 
 retry:
 	if (!isFirstAttemptToConnect) {
@@ -32,11 +45,21 @@ retry:
 		std::cout << std::endl << "MySQL Error Message: " << mysql_error(handle.get()) << std::endl;
 		goto error;
 	}
+	if (databaseDownUntil.exchange(0) != 0) {
+		std::cout << "[Database] Connection restored." << std::endl;
+	}
 	return handle;
 
 error:
 	if (retryIfError) {
-		goto retry;
+		if (!isDown && clock::now() < deadline) {
+			goto retry;
+		}
+		if (!isDown) {
+			std::cout << "[Error - Database] No connection for " << RECONNECT_DEADLINE.count()
+			          << " seconds, queries fail until the database is reachable again." << std::endl;
+		}
+		databaseDownUntil = (clock::now() + RECONNECT_DEADLINE).time_since_epoch().count();
 	}
 	return nullptr;
 }
@@ -56,7 +79,12 @@ static bool executeQuery(tfs::detail::Mysql_ptr& handle, std::string_view query,
 		if (!isLostConnectionError(error) || !retryIfLostConnection) {
 			return false;
 		}
-		handle = connectToDatabase(true);
+		// on failure keep the lost handle: escapeString/escapeBlob still need a MYSQL object
+		auto newHandle = connectToDatabase(true);
+		if (!newHandle) {
+			return false;
+		}
+		handle = std::move(newHandle);
 	}
 	return true;
 }
@@ -114,7 +142,7 @@ DBResult_ptr Database::storeQuery(std::string_view query)
 	std::lock_guard<std::recursive_mutex> lockGuard(databaseLock);
 
 retry:
-	if (!::executeQuery(handle, query, retryQueries) && !retryQueries) {
+	if (!::executeQuery(handle, query, retryQueries)) {
 		return nullptr;
 	}
 
