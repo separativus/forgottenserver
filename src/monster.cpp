@@ -1039,8 +1039,16 @@ bool Monster::walkToSpawn()
 		return false;
 	}
 
+	FindPathParams fpp;
+	fpp.fullPathSearch = true;
+	fpp.clearSight = true;
+	fpp.allowDiagonal = false;
+	fpp.minTargetDist = 0;
+	fpp.maxTargetDist = std::max(0, distance - 5);
+	fpp.maxSearchDist = distance;
+
 	listWalkDir.clear();
-	if (!getPathTo(masterPos, listWalkDir, 0, std::max(0, distance - 5), true, true, distance)) {
+	if (!getPathTo(masterPos, listWalkDir, fpp)) {
 		return false;
 	}
 
@@ -1365,9 +1373,6 @@ bool Monster::getDistanceStep(const Position& targetPos, Direction& direction, b
 			} else if (e) {
 				direction = DIRECTION_EAST;
 				return true;
-			} else if (canWalkTo(creaturePos, DIRECTION_SOUTHEAST)) {
-				direction = DIRECTION_SOUTHEAST;
-				return true;
 			}
 
 			/* fleeing */
@@ -1413,11 +1418,6 @@ bool Monster::getDistanceStep(const Position& targetPos, Direction& direction, b
 				return true;
 			}
 
-			if (canWalkTo(creaturePos, DIRECTION_NORTHWEST)) {
-				direction = DIRECTION_NORTHWEST;
-				return true;
-			}
-
 			/* fleeing */
 			bool s = canWalkTo(creaturePos, DIRECTION_SOUTH);
 			bool e = canWalkTo(creaturePos, DIRECTION_EAST);
@@ -1460,11 +1460,6 @@ bool Monster::getDistanceStep(const Position& targetPos, Direction& direction, b
 				return true;
 			}
 
-			if (canWalkTo(creaturePos, DIRECTION_NORTHEAST)) {
-				direction = DIRECTION_NORTHEAST;
-				return true;
-			}
-
 			/* fleeing */
 			bool s = canWalkTo(creaturePos, DIRECTION_SOUTH);
 			bool w = canWalkTo(creaturePos, DIRECTION_WEST);
@@ -1504,9 +1499,6 @@ bool Monster::getDistanceStep(const Position& targetPos, Direction& direction, b
 				return true;
 			} else if (s) {
 				direction = DIRECTION_SOUTH;
-				return true;
-			} else if (canWalkTo(creaturePos, DIRECTION_SOUTHWEST)) {
-				direction = DIRECTION_SOUTHWEST;
 				return true;
 			}
 
@@ -1580,20 +1572,16 @@ bool Monster::getDistanceStep(const Position& targetPos, Direction& direction, b
 
 				/* end of fleeing */
 
-				bool sw = canWalkTo(creaturePos, DIRECTION_SOUTHWEST);
-				bool se = canWalkTo(creaturePos, DIRECTION_SOUTHEAST);
+				// monsters never step diagonally: side-step, the next step can then go south
+				bool sw = w && canWalkTo(creaturePos, DIRECTION_SOUTHWEST);
+				bool se = e && canWalkTo(creaturePos, DIRECTION_SOUTHEAST);
 				if (sw || se) {
-					// we can move both dirs
 					if (sw && se) {
-						direction = boolean_random() ? DIRECTION_SOUTHWEST : DIRECTION_SOUTHEAST;
-					} else if (w) {
-						direction = DIRECTION_WEST;
+						direction = boolean_random() ? DIRECTION_WEST : DIRECTION_EAST;
 					} else if (sw) {
-						direction = DIRECTION_SOUTHWEST;
-					} else if (e) {
+						direction = DIRECTION_WEST;
+					} else {
 						direction = DIRECTION_EAST;
-					} else if (se) {
-						direction = DIRECTION_SOUTHEAST;
 					}
 					return true;
 				}
@@ -1644,20 +1632,16 @@ bool Monster::getDistanceStep(const Position& targetPos, Direction& direction, b
 
 				/* end of fleeing */
 
-				bool nw = canWalkTo(creaturePos, DIRECTION_NORTHWEST);
-				bool ne = canWalkTo(creaturePos, DIRECTION_NORTHEAST);
+				// monsters never step diagonally: side-step, the next step can then go north
+				bool nw = w && canWalkTo(creaturePos, DIRECTION_NORTHWEST);
+				bool ne = e && canWalkTo(creaturePos, DIRECTION_NORTHEAST);
 				if (nw || ne) {
-					// we can move both dirs
 					if (nw && ne) {
-						direction = boolean_random() ? DIRECTION_NORTHWEST : DIRECTION_NORTHEAST;
-					} else if (w) {
-						direction = DIRECTION_WEST;
+						direction = boolean_random() ? DIRECTION_WEST : DIRECTION_EAST;
 					} else if (nw) {
-						direction = DIRECTION_NORTHWEST;
-					} else if (e) {
+						direction = DIRECTION_WEST;
+					} else {
 						direction = DIRECTION_EAST;
-					} else if (ne) {
-						direction = DIRECTION_NORTHEAST;
 					}
 					return true;
 				}
@@ -1714,19 +1698,16 @@ bool Monster::getDistanceStep(const Position& targetPos, Direction& direction, b
 
 				/* end of fleeing */
 
-				bool se = canWalkTo(creaturePos, DIRECTION_SOUTHEAST);
-				bool ne = canWalkTo(creaturePos, DIRECTION_NORTHEAST);
+				// monsters never step diagonally: side-step, the next step can then go east
+				bool se = s && canWalkTo(creaturePos, DIRECTION_SOUTHEAST);
+				bool ne = n && canWalkTo(creaturePos, DIRECTION_NORTHEAST);
 				if (se || ne) {
 					if (se && ne) {
-						direction = boolean_random() ? DIRECTION_SOUTHEAST : DIRECTION_NORTHEAST;
-					} else if (s) {
-						direction = DIRECTION_SOUTH;
+						direction = boolean_random() ? DIRECTION_SOUTH : DIRECTION_NORTH;
 					} else if (se) {
-						direction = DIRECTION_SOUTHEAST;
-					} else if (n) {
+						direction = DIRECTION_SOUTH;
+					} else {
 						direction = DIRECTION_NORTH;
-					} else if (ne) {
-						direction = DIRECTION_NORTHEAST;
 					}
 					return true;
 				}
@@ -1777,19 +1758,16 @@ bool Monster::getDistanceStep(const Position& targetPos, Direction& direction, b
 
 				/* end of fleeing */
 
-				bool nw = canWalkTo(creaturePos, DIRECTION_NORTHWEST);
-				bool sw = canWalkTo(creaturePos, DIRECTION_SOUTHWEST);
+				// monsters never step diagonally: side-step, the next step can then go west
+				bool nw = n && canWalkTo(creaturePos, DIRECTION_NORTHWEST);
+				bool sw = s && canWalkTo(creaturePos, DIRECTION_SOUTHWEST);
 				if (nw || sw) {
 					if (nw && sw) {
-						direction = boolean_random() ? DIRECTION_NORTHWEST : DIRECTION_SOUTHWEST;
-					} else if (n) {
-						direction = DIRECTION_NORTH;
+						direction = boolean_random() ? DIRECTION_NORTH : DIRECTION_SOUTH;
 					} else if (nw) {
-						direction = DIRECTION_NORTHWEST;
-					} else if (s) {
+						direction = DIRECTION_NORTH;
+					} else {
 						direction = DIRECTION_SOUTH;
-					} else if (sw) {
-						direction = DIRECTION_SOUTHWEST;
 					}
 					return true;
 				}
@@ -1983,6 +1961,8 @@ void Monster::getPathSearchParams(const Creature* creature, FindPathParams& fpp)
 {
 	Creature::getPathSearchParams(creature, fpp);
 
+	// 7.x monsters (and summons) walk orthogonally only
+	fpp.allowDiagonal = false;
 	fpp.minTargetDist = 1;
 	fpp.maxTargetDist = mType->info.targetDistance;
 
