@@ -111,6 +111,29 @@ constexpr uint8_t basisPointsToPercent(uint16_t basisPoints)
 	return std::min<uint16_t>(basisPoints / 100, 100);
 }
 
+// The 7.x stats packet carries hit points and mana as u16 pairs, so anything
+// above 65535 does not fit. Saturating there — what the legacy engine did too
+// (protocol76.cpp:3169) — freezes the number and pins the bar at 100%, because
+// a level up refills the pool: a mage past level 1094 reads "65535" forever
+// while the server keeps counting in uint32. Divide the pair by the smallest
+// power of ten that makes the maximum fit instead: the bar tells the truth
+// again and the number stays convertible (shown value x factor = the real one).
+// Clients that took GameDoubleHealth get the untouched 32-bit values instead
+// (ProtocolGame::wideStats).
+uint32_t statsWireFactor(int64_t maximum)
+{
+	uint32_t factor = 1;
+	while (maximum / factor > std::numeric_limits<uint16_t>::max()) {
+		factor *= 10;
+	}
+	return factor;
+}
+
+uint16_t toStatsWire(int64_t value, uint32_t factor)
+{
+	return static_cast<uint16_t>(std::clamp<int64_t>(value / factor, 0, std::numeric_limits<uint16_t>::max()));
+}
+
 // The shipped dat draws 254 outfits (and objects from client id 100, so an item
 // outfit of 0 indexes at -100). 128 is the male citizen the datapack sanitizer
 // falls back to as well (converters/common.py).
@@ -2233,6 +2256,35 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 
 	sendMapDescription(pos);
 
+	// The 7.x stats packet has 16 bits for hit points and mana, which this
+	// server outgrows (a mage passes 65535 mana around level 1094). OTClient
+	// and OTClientV8 read both pairs as u32 once GameDoubleHealth is on, and
+	// the feature can be switched on from here; the original client cannot and
+	// keeps the scaled u16 pairs (see AddPlayerStats). Sent after the map
+	// description on purpose: any opcode above 50 starts the game client-side,
+	// and by now it has already started.
+	//
+	// Only for a character that actually outgrew the field, and that is not
+	// tidiness: opcode 0x43 exists in the maintained OTClient forks (mehah,
+	// OTClientV8), while the original edubart client answers an opcode it does
+	// not know by dropping the rest of the message. Tying the packet to the
+	// need keeps every session that the u16 pairs still serve exactly as it is
+	// today, and confines the risk to the players whose display is already
+	// broken — for whom the recommended clients get it right (client/README.md).
+	// A character that grows past the limit mid-session keeps the scaled pairs
+	// until it logs in again.
+	if (player->getOperatingSystem() >= CLIENTOS_OTCLIENT_LINUX &&
+	    (player->getMaxMana() > std::numeric_limits<uint16_t>::max() ||
+	     player->getMaxHealth() > std::numeric_limits<uint16_t>::max())) {
+		NetworkMessage features;
+		features.addByte(0x43); // GameServerFeatures
+		features.add<uint16_t>(1);
+		features.addByte(28); // GameDoubleHealth: u32 health and mana
+		features.addByte(0x01);
+		writeToOutputBuffer(features);
+		wideStats = true;
+	}
+
 	// send login effect
 	if (magicEffect != CONST_ME_NONE) {
 		sendMagicEffect(pos, magicEffect);
@@ -2573,13 +2625,25 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 {
 	// 7.x stats: u16 hp/maxhp, u16 cap, u32 exp (capped), u16 level + %,
-	// u16 mana/maxmana, u8 maglevel + %, u8 soul.
+	// u16 mana/maxmana, u8 maglevel + %, u8 soul. A client that took
+	// GameDoubleHealth reads the two pairs as u32 instead (wideStats).
 	msg.addByte(0xA0);
 
-	msg.add<uint16_t>(std::min<int32_t>(player->getHealth(), std::numeric_limits<uint16_t>::max()));
-	msg.add<uint16_t>(std::min<int32_t>(player->getMaxHealth(), std::numeric_limits<uint16_t>::max()));
+	if (wideStats) {
+		msg.add<uint32_t>(std::max<int32_t>(0, player->getHealth()));
+		msg.add<uint32_t>(std::max<int32_t>(0, player->getMaxHealth()));
+	} else {
+		const uint32_t factor = statsWireFactor(player->getMaxHealth());
+		msg.add<uint16_t>(toStatsWire(player->getHealth(), factor));
+		msg.add<uint16_t>(toStatsWire(player->getMaxHealth(), factor));
+	}
 
-	msg.add<uint16_t>(player->hasFlag(PlayerFlag_HasInfiniteCapacity) ? 10000 : (player->getFreeCapacity() / 100));
+	// capacity is sent in whole ounces and has no wider field to fall back on,
+	// so it saturates like the experience below rather than wrapping
+	msg.add<uint16_t>(player->hasFlag(PlayerFlag_HasInfiniteCapacity)
+	                      ? 10000
+	                      : std::min<uint32_t>(player->getFreeCapacity() / 100,
+	                                           std::numeric_limits<uint16_t>::max()));
 
 	// the 7.6 client debugs if the value is higher than 0x7FFFFFFF
 	msg.add<uint32_t>(std::min<uint64_t>(player->getExperience(), 0x7FFFFFFF));
@@ -2587,8 +2651,14 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 	msg.add<uint16_t>(player->getLevel());
 	msg.addByte(player->getLevelPercent());
 
-	msg.add<uint16_t>(std::min<int32_t>(player->getMana(), std::numeric_limits<uint16_t>::max()));
-	msg.add<uint16_t>(std::min<int32_t>(player->getMaxMana(), std::numeric_limits<uint16_t>::max()));
+	if (wideStats) {
+		msg.add<uint32_t>(player->getMana());
+		msg.add<uint32_t>(player->getMaxMana());
+	} else {
+		const uint32_t factor = statsWireFactor(player->getMaxMana());
+		msg.add<uint16_t>(toStatsWire(player->getMana(), factor));
+		msg.add<uint16_t>(toStatsWire(player->getMaxMana(), factor));
+	}
 
 	msg.addByte(std::min<uint32_t>(player->getMagicLevel(), std::numeric_limits<uint8_t>::max()));
 	msg.addByte(basisPointsToPercent(player->getMagicLevelPercent()));
