@@ -475,12 +475,8 @@ std::string tfs::lua::getErrorDesc(ErrorCode_t code)
 static std::array<ScriptEnvironment, 16> scriptEnv = {};
 static int32_t scriptEnvIndex = -1;
 
-LuaScriptInterface::LuaScriptInterface(std::string interfaceName) : interfaceName(std::move(interfaceName))
-{
-	if (!g_luaEnvironment.getLuaState()) {
-		g_luaEnvironment.initState();
-	}
-}
+// Interfaces bind to the shared lua_State in initState(); g_luaEnvironment creates that state in its own constructor.
+LuaScriptInterface::LuaScriptInterface(std::string interfaceName) : interfaceName(std::move(interfaceName)) {}
 
 LuaScriptInterface::~LuaScriptInterface() { closeState(); }
 
@@ -19052,7 +19048,7 @@ int LuaScriptInterface::luaXmlNodeNextSibling(lua_State* L)
 }
 
 //
-LuaEnvironment::LuaEnvironment() : LuaScriptInterface("Main Interface") {}
+LuaEnvironment::LuaEnvironment() : LuaScriptInterface("Main Interface") { initState(); }
 
 LuaEnvironment::~LuaEnvironment()
 {
