@@ -10,7 +10,6 @@
 
 class Container;
 class DepotLocker;
-class StoreInbox;
 
 class ContainerIterator
 {
@@ -46,9 +45,6 @@ public:
 
 	virtual DepotLocker* getDepotLocker() { return nullptr; }
 	virtual const DepotLocker* getDepotLocker() const { return nullptr; }
-
-	virtual StoreInbox* getStoreInbox() { return nullptr; }
-	virtual const StoreInbox* getStoreInbox() const { return nullptr; }
 
 	Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream) override;
 	bool unserializeItemNode(OTB::Loader& loader, const OTB::Node& node, PropStream& propStream) override;
@@ -110,6 +106,7 @@ public:
 	void postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index,
 	                            cylinderlink_t link = LINK_OWNER) override;
 
+	void internalRemoveThing(Thing* thing) override final;
 	void internalAddThing(Thing* thing) override final;
 	void internalAddThing(uint32_t index, Thing* thing) override final;
 	void startDecaying() override final;

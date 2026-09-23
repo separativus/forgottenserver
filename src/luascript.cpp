@@ -15,10 +15,8 @@
 #include "game.h"
 #include "globalevent.h"
 #include "housetile.h"
-#include "inbox.h"
 #include "iologindata.h"
 #include "iomapserialize.h"
-#include "iomarket.h"
 #include "luavariant.h"
 #include "matrixarea.h"
 #include "monster.h"
@@ -33,7 +31,6 @@
 #include "script.h"
 #include "spectators.h"
 #include "spells.h"
-#include "storeinbox.h"
 #include "teleport.h"
 #include "weapons.h"
 
@@ -2272,7 +2269,6 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn(L, "configKeys", ConfigManager::ALLOW_CLONES);
 	registerEnumIn(L, "configKeys", ConfigManager::BIND_ONLY_GLOBAL_ADDRESS);
 	registerEnumIn(L, "configKeys", ConfigManager::OPTIMIZE_DATABASE);
-	registerEnumIn(L, "configKeys", ConfigManager::MARKET_PREMIUM);
 	registerEnumIn(L, "configKeys", ConfigManager::EMOTE_SPELLS);
 	registerEnumIn(L, "configKeys", ConfigManager::STAMINA_SYSTEM);
 	registerEnumIn(L, "configKeys", ConfigManager::WARN_UNSAFE_SCRIPTS);
@@ -2332,9 +2328,6 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn(L, "configKeys", ConfigManager::LOGIN_PORT);
 	registerEnumIn(L, "configKeys", ConfigManager::STATUS_PORT);
 	registerEnumIn(L, "configKeys", ConfigManager::STAIRHOP_DELAY);
-	registerEnumIn(L, "configKeys", ConfigManager::MARKET_OFFER_DURATION);
-	registerEnumIn(L, "configKeys", ConfigManager::CHECK_EXPIRED_MARKET_OFFERS_EACH_MINUTES);
-	registerEnumIn(L, "configKeys", ConfigManager::MAX_MARKET_OFFERS_AT_A_TIME_PER_PLAYER);
 	registerEnumIn(L, "configKeys", ConfigManager::EXP_FROM_PLAYERS_LEVEL_RANGE);
 	registerEnumIn(L, "configKeys", ConfigManager::MAX_PACKETS_PER_SECOND);
 	registerEnumIn(L, "configKeys", ConfigManager::TWO_FACTOR_AUTH);
@@ -2749,7 +2742,6 @@ void LuaScriptInterface::registerFunctions()
 	registerMethod(L, "Player", "getFreeCapacity", LuaScriptInterface::luaPlayerGetFreeCapacity);
 
 	registerMethod(L, "Player", "getDepotChest", LuaScriptInterface::luaPlayerGetDepotChest);
-	registerMethod(L, "Player", "getInbox", LuaScriptInterface::luaPlayerGetInbox);
 
 	registerMethod(L, "Player", "getSkullTime", LuaScriptInterface::luaPlayerGetSkullTime);
 	registerMethod(L, "Player", "setSkullTime", LuaScriptInterface::luaPlayerSetSkullTime);
@@ -2902,8 +2894,6 @@ void LuaScriptInterface::registerFunctions()
 	registerMethod(L, "Player", "hasChaseMode", LuaScriptInterface::luaPlayerHasChaseMode);
 	registerMethod(L, "Player", "hasSecureMode", LuaScriptInterface::luaPlayerHasSecureMode);
 	registerMethod(L, "Player", "getFightMode", LuaScriptInterface::luaPlayerGetFightMode);
-
-	registerMethod(L, "Player", "getStoreInbox", LuaScriptInterface::luaPlayerGetStoreInbox);
 
 	registerMethod(L, "Player", "isNearDepotBox", LuaScriptInterface::luaPlayerIsNearDepotBox);
 
@@ -3193,8 +3183,6 @@ void LuaScriptInterface::registerFunctions()
 	registerMethod(L, "ItemType", "getVocationString", LuaScriptInterface::luaItemTypeGetVocationString);
 	registerMethod(L, "ItemType", "getMinReqLevel", LuaScriptInterface::luaItemTypeGetMinReqLevel);
 	registerMethod(L, "ItemType", "getMinReqMagicLevel", LuaScriptInterface::luaItemTypeGetMinReqMagicLevel);
-	registerMethod(L, "ItemType", "getMarketBuyStatistics", LuaScriptInterface::luaItemTypeGetMarketBuyStatistics);
-	registerMethod(L, "ItemType", "getMarketSellStatistics", LuaScriptInterface::luaItemTypeGetMarketSellStatistics);
 
 	registerMethod(L, "ItemType", "hasSubType", LuaScriptInterface::luaItemTypeHasSubType);
 
@@ -9148,25 +9136,6 @@ int LuaScriptInterface::luaPlayerGetDepotChest(lua_State* L)
 	return 1;
 }
 
-int LuaScriptInterface::luaPlayerGetInbox(lua_State* L)
-{
-	// player:getInbox()
-	Player* player = tfs::lua::getUserdata<Player>(L, 1);
-	if (!player) {
-		lua_pushnil(L);
-		return 1;
-	}
-
-	Inbox* inbox = player->getInbox();
-	if (inbox) {
-		tfs::lua::pushUserdata<Item>(L, inbox);
-		tfs::lua::setItemMetatable(L, -1, inbox);
-	} else {
-		tfs::lua::pushBoolean(L, false);
-	}
-	return 1;
-}
-
 int LuaScriptInterface::luaPlayerGetSkullTime(lua_State* L)
 {
 	// player:getSkullTime()
@@ -11145,26 +11114,6 @@ int LuaScriptInterface::luaPlayerGetFightMode(lua_State* L)
 	} else {
 		lua_pushnil(L);
 	}
-	return 1;
-}
-
-int LuaScriptInterface::luaPlayerGetStoreInbox(lua_State* L)
-{
-	// player:getStoreInbox()
-	Player* player = tfs::lua::getUserdata<Player>(L, 1);
-	if (!player) {
-		lua_pushnil(L);
-		return 1;
-	}
-
-	Container* storeInbox = player->getStoreInbox();
-	if (!storeInbox) {
-		lua_pushnil(L);
-		return 1;
-	}
-
-	tfs::lua::pushUserdata(L, storeInbox);
-	tfs::lua::setMetatable(L, -1, "Container");
 	return 1;
 }
 
@@ -14045,48 +13994,6 @@ int LuaScriptInterface::luaItemTypeGetMinReqMagicLevel(lua_State* L)
 	const ItemType* itemType = tfs::lua::getUserdata<const ItemType>(L, 1);
 	if (itemType) {
 		lua_pushinteger(L, itemType->minReqMagicLevel);
-	} else {
-		lua_pushnil(L);
-	}
-	return 1;
-}
-
-int LuaScriptInterface::luaItemTypeGetMarketBuyStatistics(lua_State* L)
-{
-	// itemType:getMarketBuyStatistics()
-	const ItemType* itemType = tfs::lua::getUserdata<const ItemType>(L, 1);
-	if (itemType) {
-		MarketStatistics* statistics = IOMarket::getInstance().getPurchaseStatistics(itemType->id);
-		if (statistics) {
-			lua_createtable(L, 4, 0);
-			setField(L, "numTransactions", statistics->numTransactions);
-			setField(L, "totalPrice", statistics->totalPrice);
-			setField(L, "highestPrice", statistics->highestPrice);
-			setField(L, "lowestPrice", statistics->lowestPrice);
-		} else {
-			lua_pushnil(L);
-		}
-	} else {
-		lua_pushnil(L);
-	}
-	return 1;
-}
-
-int LuaScriptInterface::luaItemTypeGetMarketSellStatistics(lua_State* L)
-{
-	// itemType:getMarketSellStatistics()
-	const ItemType* itemType = tfs::lua::getUserdata<const ItemType>(L, 1);
-	if (itemType) {
-		MarketStatistics* statistics = IOMarket::getInstance().getSaleStatistics(itemType->id);
-		if (statistics) {
-			lua_createtable(L, 4, 0);
-			setField(L, "numTransactions", statistics->numTransactions);
-			setField(L, "totalPrice", statistics->totalPrice);
-			setField(L, "highestPrice", statistics->highestPrice);
-			setField(L, "lowestPrice", statistics->lowestPrice);
-		} else {
-			lua_pushnil(L);
-		}
 	} else {
 		lua_pushnil(L);
 	}

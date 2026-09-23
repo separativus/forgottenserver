@@ -10,8 +10,6 @@
 
 class Action;
 using Action_ptr = std::unique_ptr<Action>;
-using ActionFunction = std::function<bool(Player* player, Item* item, const Position& fromPosition, Thing* target,
-                                          const Position& toPosition, bool isHotkey)>;
 
 class Action : public Event
 {
@@ -50,8 +48,6 @@ public:
 	virtual bool hasOwnErrorHandler() { return false; }
 	virtual Thing* getTarget(Player* player, Creature* targetCreature, const Position& toPosition,
 	                         uint8_t toStackPos) const;
-
-	ActionFunction function;
 
 private:
 	std::string_view getScriptEventName() const override { return "onUse"; }

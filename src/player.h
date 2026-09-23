@@ -182,10 +182,6 @@ public:
 	void setLastWalkthroughAttempt(int64_t walkthroughAttempt) { lastWalkthroughAttempt = walkthroughAttempt; }
 	void setLastWalkthroughPosition(Position walkthroughPosition) { lastWalkthroughPosition = walkthroughPosition; }
 
-	Inbox* getInbox() const { return inbox; }
-
-	StoreInbox* getStoreInbox() const { return storeInbox; }
-
 	uint32_t getClientIcons() const;
 
 	const GuildWarVector& getGuildWarVector() const { return guildWarVector; }
@@ -252,9 +248,6 @@ public:
 
 	void setGroup(Group* newGroup) { group = newGroup; }
 	Group* getGroup() const { return group; }
-
-	void setInMarket(bool value) { inMarket = value; }
-	bool isInMarket() const { return inMarket; }
 
 	int32_t getIdleTime() const { return idleTime; }
 
@@ -942,51 +935,6 @@ public:
 			client->sendCloseShop();
 		}
 	}
-	void sendMarketEnter() const
-	{
-		if (client) {
-			client->sendMarketEnter();
-		}
-	}
-	void sendMarketLeave()
-	{
-		inMarket = false;
-		if (client) {
-			client->sendMarketLeave();
-		}
-	}
-	void sendMarketBrowseItem(uint16_t itemId, const MarketOfferList& buyOffers,
-	                          const MarketOfferList& sellOffers) const
-	{
-		if (client) {
-			client->sendMarketBrowseItem(itemId, buyOffers, sellOffers);
-		}
-	}
-	void sendMarketBrowseOwnOffers(const MarketOfferList& buyOffers, const MarketOfferList& sellOffers) const
-	{
-		if (client) {
-			client->sendMarketBrowseOwnOffers(buyOffers, sellOffers);
-		}
-	}
-	void sendMarketBrowseOwnHistory(const HistoryMarketOfferList& buyOffers,
-	                                const HistoryMarketOfferList& sellOffers) const
-	{
-		if (client) {
-			client->sendMarketBrowseOwnHistory(buyOffers, sellOffers);
-		}
-	}
-	void sendMarketAcceptOffer(const MarketOfferEx& offer) const
-	{
-		if (client) {
-			client->sendMarketAcceptOffer(offer);
-		}
-	}
-	void sendMarketCancelOffer(const MarketOfferEx& offer) const
-	{
-		if (client) {
-			client->sendMarketCancelOffer(offer);
-		}
-	}
 	void sendTradeItemRequest(const std::string& traderName, const Item* item, bool ack) const
 	{
 		if (client) {
@@ -1217,7 +1165,6 @@ private:
 	Guild_ptr guild = nullptr;
 	GuildRank_ptr guildRank = nullptr;
 	Group* group = nullptr;
-	Inbox* inbox;
 	Item* tradeItem = nullptr;
 	Item* inventory[CONST_SLOT_LAST + 1] = {};
 	Item* writeItem = nullptr;
@@ -1228,7 +1175,6 @@ private:
 	SchedulerTask* walkTask = nullptr;
 	Town* town = nullptr;
 	Vocation* vocation = nullptr;
-	StoreInbox* storeInbox = nullptr;
 	DepotLocker_ptr depotLocker = nullptr;
 
 	uint32_t inventoryWeight = 0;
@@ -1284,7 +1230,6 @@ private:
 
 	bool chaseMode = false;
 	bool secureMode = false;
-	bool inMarket = false;
 	bool wasMounted = false;
 	bool ghostMode = false;
 	bool pzLocked = false;

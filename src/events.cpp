@@ -84,8 +84,6 @@ bool Events::load()
 				info.playerOnLookInTrade = event;
 			} else if (methodName == "onLookInShop") {
 				info.playerOnLookInShop = event;
-			} else if (methodName == "onLookInMarket") {
-				info.playerOnLookInMarket = event;
 			} else if (methodName == "onTradeRequest") {
 				info.playerOnTradeRequest = event;
 			} else if (methodName == "onTradeAccept") {
@@ -726,33 +724,6 @@ bool Events::eventPlayerOnLookInShop(Player* player, const ItemType* itemType, u
 	lua_pushnumber(L, count);
 
 	return scriptInterface.callFunction(3);
-}
-
-bool Events::eventPlayerOnLookInMarket(Player* player, const ItemType* itemType)
-{
-	// Player:onLookInMarket(itemType) or Player.onLookInMarket(self, itemType)
-	if (info.playerOnLookInMarket == -1) {
-		return true;
-	}
-
-	if (!tfs::lua::reserveScriptEnv()) {
-		std::cout << "[Error - Events::eventPlayerOnLookInMarket] Call stack overflow" << std::endl;
-		return false;
-	}
-
-	ScriptEnvironment* env = tfs::lua::getScriptEnv();
-	env->setScriptId(info.playerOnLookInMarket, &scriptInterface);
-
-	lua_State* L = scriptInterface.getLuaState();
-	scriptInterface.pushFunction(info.playerOnLookInMarket);
-
-	tfs::lua::pushUserdata(L, player);
-	tfs::lua::setMetatable(L, -1, "Player");
-
-	tfs::lua::pushUserdata(L, itemType);
-	tfs::lua::setMetatable(L, -1, "ItemType");
-
-	return scriptInterface.callFunction(2);
 }
 
 ReturnValue Events::eventPlayerOnMoveItem(Player* player, Item* item, uint16_t count, const Position& fromPosition,

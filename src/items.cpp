@@ -565,7 +565,6 @@ bool Items::loadFromOtb(const std::string& file)
 		iType.speed = speed;
 		iType.lightLevel = lightLevel;
 		iType.lightColor = lightColor;
-		iType.wareId = wareId;
 		iType.classification = classification;
 		iType.alwaysOnTopOrder = alwaysOnTopOrder;
 	}

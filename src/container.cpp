@@ -8,10 +8,8 @@
 #include "depotchest.h"
 #include "game.h"
 #include "housetile.h"
-#include "inbox.h"
 #include "iomap.h"
 #include "spectators.h"
-#include "storeinbox.h"
 
 extern Game g_game;
 
@@ -254,30 +252,17 @@ ReturnValue Container::queryAdd(int32_t index, const Thing& thing, uint32_t coun
 		return RETURNVALUE_QUIVERAMMOONLY;
 	}
 
-	// store items can be only moved into depot chest or store inbox
+	// store items can be only moved into a depot chest
 	if (item->isStoreItem() && !dynamic_cast<const DepotChest*>(this)) {
 		return RETURNVALUE_ITEMCANNOTBEMOVEDTHERE;
 	}
 
 	const Cylinder* cylinder = getParent();
 
-	// don't allow moving items into container that is store item and is in store inbox
-	if (isStoreItem() && dynamic_cast<const StoreInbox*>(cylinder)) {
-		ReturnValue ret = RETURNVALUE_ITEMCANNOTBEMOVEDTHERE;
-		if (!item->isStoreItem()) {
-			ret = RETURNVALUE_CANNOTMOVEITEMISNOTSTOREITEM;
-		}
-		return ret;
-	}
-
 	if (!hasBitSet(FLAG_NOLIMIT, flags)) {
 		while (cylinder) {
 			if (cylinder == &thing) {
 				return RETURNVALUE_THISISIMPOSSIBLE;
-			}
-
-			if (dynamic_cast<const Inbox*>(cylinder)) {
-				return RETURNVALUE_CONTAINERNOTENOUGHROOM;
 			}
 
 			cylinder = cylinder->getParent();
@@ -678,6 +663,15 @@ void Container::postRemoveNotification(Thing* thing, const Cylinder* newParent, 
 	} else {
 		topParent->postRemoveNotification(thing, newParent, index, LINK_PARENT);
 	}
+}
+
+void Container::internalRemoveThing(Thing* thing)
+{
+	auto cit = std::find(itemlist.begin(), itemlist.end(), thing);
+	if (cit == itemlist.end()) {
+		return;
+	}
+	itemlist.erase(cit);
 }
 
 void Container::internalAddThing(Thing* thing) { internalAddThing(0, thing); }

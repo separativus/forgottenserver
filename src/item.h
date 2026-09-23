@@ -897,8 +897,6 @@ public:
 		       !hasAttribute(ITEM_ATTRIBUTE_ACTIONID);
 	}
 
-	bool hasMarketAttributes() const;
-
 	std::unique_ptr<ItemAttributes>& getAttributes()
 	{
 		if (!attributes) {

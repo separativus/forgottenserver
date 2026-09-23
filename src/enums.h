@@ -97,29 +97,6 @@ enum VipStatus_t : uint8_t
 	VIPSTATUS_TRAINING = 3
 };
 
-enum MarketAction_t
-{
-	MARKETACTION_BUY = 0,
-	MARKETACTION_SELL = 1,
-};
-
-enum MarketRequest_t
-{
-	MARKETREQUEST_OWN_HISTORY = 1,
-	MARKETREQUEST_OWN_OFFERS = 2,
-	MARKETREQUEST_ITEM = 3,
-};
-
-enum MarketOfferState_t
-{
-	OFFERSTATE_ACTIVE = 0,
-	OFFERSTATE_CANCELLED = 1,
-	OFFERSTATE_EXPIRED = 2,
-	OFFERSTATE_ACCEPTED = 3,
-
-	OFFERSTATE_ACCEPTEDEX = 255,
-};
-
 enum ChannelEvent_t : uint8_t
 {
 	CHANNELEVENT_JOIN = 0,
@@ -487,7 +464,6 @@ enum ReturnValue
 	RETURNVALUE_TRADEPLAYERHIGHESTBIDDER,
 	RETURNVALUE_YOUCANNOTTRADETHISHOUSE,
 	RETURNVALUE_YOUDONTHAVEREQUIREDPROFESSION,
-	RETURNVALUE_CANNOTMOVEITEMISNOTSTOREITEM,
 	RETURNVALUE_ITEMCANNOTBEMOVEDTHERE,
 	RETURNVALUE_YOUCANNOTUSETHISBED,
 	RETURNVALUE_QUIVERAMMOONLY,
@@ -570,59 +546,6 @@ struct ShopInfo
 	{}
 };
 
-struct MarketOffer
-{
-	uint64_t price;
-	uint32_t timestamp;
-	uint16_t amount;
-	uint16_t counter;
-	uint16_t itemId;
-	std::string playerName;
-};
-
-struct MarketOfferEx
-{
-	MarketOfferEx() = default;
-	MarketOfferEx(MarketOfferEx&& other) :
-	    id(other.id),
-	    playerId(other.playerId),
-	    timestamp(other.timestamp),
-	    price(other.price),
-	    amount(other.amount),
-	    counter(other.counter),
-	    itemId(other.itemId),
-	    type(other.type),
-	    playerName(std::move(other.playerName))
-	{}
-
-	uint32_t id;
-	uint32_t playerId;
-	uint32_t timestamp;
-	uint64_t price;
-	uint16_t amount;
-	uint16_t counter;
-	uint16_t itemId;
-	MarketAction_t type;
-	std::string playerName;
-};
-
-struct HistoryMarketOffer
-{
-	uint32_t timestamp;
-	uint64_t price;
-	uint16_t itemId;
-	uint16_t amount;
-	MarketOfferState_t state;
-};
-
-struct MarketStatistics
-{
-	uint32_t numTransactions = 0;
-	uint32_t highestPrice = 0;
-	uint64_t totalPrice = 0;
-	uint32_t lowestPrice = 0;
-};
-
 struct ModalWindow
 {
 	std::list<std::pair<std::string, uint8_t>> buttons, choices;
@@ -661,8 +584,6 @@ struct CombatDamage
 	bool leeched = false;
 };
 
-using MarketOfferList = std::list<MarketOffer>;
-using HistoryMarketOfferList = std::list<HistoryMarketOffer>;
 using ShopInfoList = std::list<ShopInfo>;
 
 enum MonstersEvent_t : uint8_t

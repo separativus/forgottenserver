@@ -13,7 +13,6 @@
 #include "depotchest.h"
 #include "events.h"
 #include "game.h"
-#include "inbox.h"
 #include "iologindata.h"
 #include "monster.h"
 #include "movement.h"
@@ -22,7 +21,6 @@
 #include "party.h"
 #include "scheduler.h"
 #include "spectators.h"
-#include "storeinbox.h"
 #include "tools.h"
 #include "weapons.h"
 
@@ -39,19 +37,7 @@ MuteCountMap Player::muteCountMap;
 uint32_t Player::playerAutoID = 0x10000000;
 uint32_t Player::playerIDLimit = 0x20000000;
 
-Player::Player(ProtocolGame_ptr p) :
-    Creature(),
-    lastPing(OTSYS_TIME()),
-    lastPong(lastPing),
-    client(std::move(p)),
-    inbox(new Inbox(ITEM_INBOX)),
-    storeInbox(new StoreInbox(ITEM_STORE_INBOX))
-{
-	inbox->incrementReferenceCounter();
-
-	storeInbox->setParent(this);
-	storeInbox->incrementReferenceCounter();
-}
+Player::Player(ProtocolGame_ptr p) : Creature(), lastPing(OTSYS_TIME()), lastPong(lastPing), client(std::move(p)) {}
 
 Player::~Player()
 {
@@ -62,14 +48,16 @@ Player::~Player()
 		}
 	}
 
-	if (depotLocker) {
-		depotLocker->removeInbox(inbox);
+	// The player owns its depot chests. A 10.x locker lists them in a chest of
+	// its own, so they leave that list first and are not released twice; a 7.x
+	// chest only hangs under the locker on the map and sits in no list at all.
+	for (const auto& [_, depotChest] : depotChests) {
+		if (Cylinder* parent = depotChest->getRealParent()) {
+			parent->internalRemoveThing(depotChest);
+		}
+		depotChest->setParent(nullptr);
+		depotChest->decrementReferenceCounter();
 	}
-
-	inbox->decrementReferenceCounter();
-
-	storeInbox->setParent(nullptr);
-	storeInbox->decrementReferenceCounter();
 
 	setWriteItem(nullptr);
 	setEditHouse(nullptr);
@@ -466,10 +454,6 @@ void Player::updateInventoryWeight()
 			inventoryWeight += item->getWeight();
 		}
 	}
-
-	if (StoreInbox* storeInbox = getStoreInbox()) {
-		inventoryWeight += storeInbox->getWeight();
-	}
 }
 
 void Player::addSkillAdvance(skills_t skill, uint64_t count)
@@ -830,35 +814,26 @@ DepotChest* Player::getDepotChest(uint32_t depotId, bool autoCreate)
 
 	// Without the numbered boxes the storage wears the id the era does have for
 	// it; sending a box the client cannot draw ends the session on
-	// "Objects.cpp 267: assertion failed (Type = 0)". Only the look changes —
-	// the contents, the depot id and the save path are the same either way.
-	if (!Item::items.hasDepotBoxes()) {
+	// "Objects.cpp 267: assertion failed (Type = 0)". And it is a plain
+	// container like the 7.x depot was: a 7.x client draws a window exactly
+	// as big as the capacity and cannot page, so a paginated chest showed it
+	// more items than slots. The depot id and the save path stay the same.
+	bool legacyDepot = !Item::items.hasDepotBoxes();
+	if (legacyDepot) {
 		depotItemId = ITEM_DEPOT;
 	}
 
-	it = depotChests.emplace(depotId, new DepotChest(depotItemId)).first;
-	it->second->setMaxDepotItems(getMaxDepotItems());
-	return it->second;
+	DepotChest* depotChest = new DepotChest(depotItemId, !legacyDepot);
+	depotChest->incrementReferenceCounter();
+	depotChest->setMaxDepotItems(getMaxDepotItems());
+	depotChests.emplace(depotId, depotChest);
+	return depotChest;
 }
 
 DepotLocker& Player::getDepotLocker()
 {
 	if (!depotLocker) {
 		depotLocker = std::make_shared<DepotLocker>(ITEM_LOCKER);
-		// The market stall (14405) and the mail inbox (14404) are 8.x ids. A 7.x
-		// items.otb stops at 5089, so Item::CreateItem hands back a nullptr for
-		// the market — which internalAddThing used to dereference, killing the
-		// server the first time anyone right-clicked a depot — and the inbox
-		// would reach the client as an item with client id 0, the assert that
-		// ends a 7.x session. Neither has a window in this protocol anyway, so
-		// the locker holds what the era knows: the depot chest.
-		if (Item* market = Item::CreateItem(ITEM_MARKET)) {
-			depotLocker->internalAddThing(market);
-		}
-		if (Item::items[ITEM_INBOX].id != 0) {
-			depotLocker->internalAddThing(inbox);
-		}
-
 		DepotChest* depotChest = new DepotChest(ITEM_DEPOT, false);
 		// adding in reverse to align them from first to last
 		for (int16_t depotId = depotChest->capacity(); depotId >= 0; --depotId) {
@@ -1394,11 +1369,6 @@ void Player::onCreatureMove(Creature* creature, const Tile* newTile, const Posit
 			}
 		}
 		modalWindows.clear();
-	}
-
-	// leave market
-	if (inMarket) {
-		inMarket = false;
 	}
 
 	if (party) {
@@ -3302,12 +3272,6 @@ void Player::postRemoveNotification(Thing* thing, const Cylinder* newParent, int
 					}
 
 					if (!isOwner) {
-						autoCloseContainers(container);
-					}
-				} else if (const Inbox* inboxContainer = dynamic_cast<const Inbox*>(topContainer)) {
-					if (inboxContainer == inbox) {
-						onSendContainer(container);
-					} else {
 						autoCloseContainers(container);
 					}
 				} else {

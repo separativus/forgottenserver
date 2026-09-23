@@ -9,8 +9,6 @@
 #include "configmanager.h"
 #include "depotchest.h"
 #include "game.h"
-#include "inbox.h"
-#include "storeinbox.h"
 
 extern Game g_game;
 
@@ -473,7 +471,15 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result)
 		}
 	}
 
-	// load inbox items
+	// A 7.x depot chest shows the client no more things than it has slots;
+	// depots saved while it paginated can hold more, and those go into backpacks.
+	for (const auto& [_, depotChest] : player->depotChests) {
+		depotChest->packOverflow();
+	}
+
+	// The inbox is gone and no 7.x client could ever open it. Items still
+	// stored for it move into the depot of the player's home town, and the
+	// next save deletes their rows.
 	itemMap.clear();
 
 	if ((result = db.storeQuery(fmt::format(
@@ -481,43 +487,18 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result)
 	         player->getGUID())))) {
 		loadItems(itemMap, result);
 
+		DepotChest* depotChest = player->getDepotChest(player->getTown()->getDepotId(), true);
 		for (ItemMap::const_reverse_iterator it = itemMap.rbegin(), end = itemMap.rend(); it != end; ++it) {
 			const std::pair<Item*, int32_t>& pair = it->second;
 			Item* item = pair.first;
 			int32_t pid = pair.second;
 
 			if (pid >= 0 && pid < 100) {
-				player->getInbox()->internalAddThing(item);
-			} else {
-				ItemMap::const_iterator it2 = itemMap.find(pid);
-
-				if (it2 == itemMap.end()) {
-					continue;
+				// a store item may not go into a backpack: past the last slot rather than lost
+				if (g_game.internalAddItem(depotChest->getDeliveryContainer(), item, INDEX_WHEREEVER, FLAG_NOLIMIT) !=
+				    RETURNVALUE_NOERROR) {
+					depotChest->internalAddThing(item);
 				}
-
-				Container* container = it2->second.first->getContainer();
-				if (container) {
-					container->internalAddThing(item);
-				}
-			}
-		}
-	}
-
-	// load store inbox items
-	itemMap.clear();
-
-	if ((result = db.storeQuery(fmt::format(
-	         "SELECT `pid`, `sid`, `itemtype`, `count`, `attributes` FROM `player_storeinboxitems` WHERE `player_id` = {:d} ORDER BY `sid` DESC",
-	         player->getGUID())))) {
-		loadItems(itemMap, result);
-
-		for (ItemMap::const_reverse_iterator it = itemMap.rbegin(), end = itemMap.rend(); it != end; ++it) {
-			const std::pair<Item*, int32_t>& pair = it->second;
-			Item* item = pair.first;
-			int32_t pid = pair.second;
-
-			if (pid >= 0 && pid < 100) {
-				player->getStoreInbox()->internalAddThing(item);
 			} else {
 				ItemMap::const_iterator it2 = itemMap.find(pid);
 
@@ -844,38 +825,8 @@ bool IOLoginData::savePlayer(Player* player)
 		return false;
 	}
 
-	// save inbox items
+	// the loaded inbox items are in the depot now
 	if (!db.executeQuery(fmt::format("DELETE FROM `player_inboxitems` WHERE `player_id` = {:d}", player->getGUID()))) {
-		return false;
-	}
-
-	DBInsert inboxQuery(
-	    "INSERT INTO `player_inboxitems` (`player_id`, `pid`, `sid`, `itemtype`, `count`, `attributes`) VALUES ");
-	itemList.clear();
-
-	for (Item* item : player->getInbox()->getItemList()) {
-		itemList.emplace_back(0, item);
-	}
-
-	if (!saveItems(player, itemList, inboxQuery, propWriteStream)) {
-		return false;
-	}
-
-	// save store inbox items
-	if (!db.executeQuery(
-	        fmt::format("DELETE FROM `player_storeinboxitems` WHERE `player_id` = {:d}", player->getGUID()))) {
-		return false;
-	}
-
-	DBInsert storeInboxQuery(
-	    "INSERT INTO `player_storeinboxitems` (`player_id`, `pid`, `sid`, `itemtype`, `count`, `attributes`) VALUES ");
-	itemList.clear();
-
-	for (Item* item : player->getStoreInbox()->getItemList()) {
-		itemList.emplace_back(0, item);
-	}
-
-	if (!saveItems(player, itemList, storeInboxQuery, propWriteStream)) {
 		return false;
 	}
 
