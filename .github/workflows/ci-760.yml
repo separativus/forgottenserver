@@ -50,7 +50,7 @@ jobs:
                 cmake build-essential git ca-certificates \
                 libluajit-5.1-dev libmariadb-dev libmariadb-dev-compat \
                 libboost-system-dev libboost-iostreams-dev libboost-locale-dev \
-                libpugixml-dev libssl-dev libfmt-dev \
+                libpugixml-dev libssl-dev libfmt-dev libboost-test-dev \
            && rm -rf /var/lib/apt/lists/*
           DOCKERFILE
 
@@ -58,15 +58,24 @@ jobs:
         # CMakeLists defaults ENABLE_UNITY_BUILD to ON: 77 sources collapse to
         # ten translation units and a cold build takes ~20 s here, so there is
         # nothing to gain from carrying a compiler cache across runs.
+        # The flags production builds with: optimised, with debug info and
+        # frame pointers for backtraces; asserts stay on (no -DNDEBUG).
         run: |
           docker run --rm -u "$(id -u)" -v "$PWD:/src" -w /src "$BUILDER_IMAGE" \
-            sh -c 'cmake -S . -B build-ci -DHTTP=OFF -DUSE_LUAJIT=ON &&
+            sh -c 'cmake -S . -B build-ci -DHTTP=OFF -DUSE_LUAJIT=ON -DBUILD_TESTING=ON \
+                     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+                     "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O2 -g -fno-omit-frame-pointer" &&
                    cmake --build build-ci -j"$(nproc)"'
 
       - name: Binary is there
         run: |
           test -x build-ci/tfs
           ls -lh build-ci/tfs
+
+      - name: Unit tests
+        run: |
+          docker run --rm -u "$(id -u)" -v "$PWD:/src" -w /src/build-ci "$BUILDER_IMAGE" \
+            ctest --output-on-failure
 
   lua:
     name: Lua syntax
