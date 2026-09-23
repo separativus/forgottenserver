@@ -13,12 +13,6 @@ endif()
 
 set(BOOST_REQUIRED_VERSION 1.71.0)
 
-option(HTTP "Enable HTTP support" ON)
-if (HTTP)
-    list(APPEND VCPKG_MANIFEST_FEATURES "http")
-    set(BOOST_REQUIRED_VERSION 1.75.0)
-endif()
-
 option(BUILD_TESTING "Build unit tests" OFF)
 if (BUILD_TESTING)
     list(APPEND VCPKG_MANIFEST_FEATURES "unit-tests")
@@ -79,9 +73,6 @@ if (APPLE)
 endif()
 
 set(BOOST_REQUIRED_COMPONENTS system iostreams locale)
-if (HTTP)
-    list(APPEND BOOST_REQUIRED_COMPONENTS json)
-endif ()
 if (BUILD_TESTING)
     list(APPEND BOOST_REQUIRED_COMPONENTS unit_test_framework)
 endif ()
