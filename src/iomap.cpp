@@ -5,6 +5,7 @@
 
 #include "iomap.h"
 
+#include "depotlocker.h"
 #include "housetile.h"
 
 /*
@@ -124,6 +125,8 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName)
 		setLastErrorString(err.what());
 		return false;
 	}
+
+	resolveTownDepots(*map);
 
 	std::cout << "> Map loading time: " << (OTSYS_TIME() - start) / (1000.) << " seconds." << std::endl;
 	return true;
@@ -275,6 +278,10 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
 						return false;
 					}
 
+					if (const DepotLocker* locker = dynamic_cast<const DepotLocker*>(item)) {
+						lockers.push_back({Position(x, y, z), locker->getDepotId()});
+					}
+
 					if (isHouseTile && item->isMoveable()) {
 						std::cout << "[Warning - IOMap::loadMap] Moveable item with ID: " << item->getID()
 						          << ", in house: " << house->getId() << ", at position [x: " << x << ", y: " << y
@@ -333,6 +340,10 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
 				return false;
 			}
 
+			if (const DepotLocker* locker = dynamic_cast<const DepotLocker*>(item)) {
+				lockers.push_back({Position(x, y, z), locker->getDepotId()});
+			}
+
 			if (isHouseTile && item->isMoveable()) {
 				std::cout << "[Warning - IOMap::loadMap] Moveable item with ID: " << item->getID()
 				          << ", in house: " << house->getId() << ", at position [x: " << x << ", y: " << y
@@ -368,6 +379,30 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
 		map.setTile(x, y, z, tile);
 	}
 	return true;
+}
+
+void IOMap::resolveTownDepots(Map& map) const
+{
+	// A town's depot is whatever its own locker opens: the depot id is the
+	// locker's ATTR_DEPOT_ID and says nothing about the town around it (one
+	// map carries several worlds, each with its own depot id).
+	for (const auto& [_, town] : map.towns.getTowns()) {
+		const Position& temple = town->getTemplePosition();
+		const tfs::town::MapLocker* locker = tfs::town::nearestLocker(temple, lockers);
+		if (!locker) {
+			std::cout << "[Warning - IOMap::loadMap] Town " << town->getName()
+			          << " has no depot locker on the map, deliveries go to depot 0." << std::endl;
+			continue;
+		}
+
+		uint32_t distance = tfs::town::depotDistance(temple, locker->position);
+		if (distance > tfs::town::DEPOT_REACH) {
+			std::cout << "[Warning - IOMap::loadMap] Town " << town->getName() << " has no depot locker within "
+			          << tfs::town::DEPOT_REACH << " squares of its temple, deliveries go to depot " << locker->depotId
+			          << " of the nearest one at " << locker->position << '.' << std::endl;
+		}
+		town->setDepotId(locker->depotId);
+	}
 }
 
 bool IOMap::parseTowns(OTB::Loader& loader, const OTB::Node& townsNode, Map& map)

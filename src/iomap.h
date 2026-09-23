@@ -136,7 +136,9 @@ private:
 	bool parseWaypoints(OTB::Loader& loader, const OTB::Node& waypointsNode, Map& map);
 	bool parseTowns(OTB::Loader& loader, const OTB::Node& townsNode, Map& map);
 	bool parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Map& map);
+	void resolveTownDepots(Map& map) const;
 	std::string errorString;
+	std::vector<tfs::town::MapLocker> lockers;
 };
 
 #endif // FS_IOMAP_H
