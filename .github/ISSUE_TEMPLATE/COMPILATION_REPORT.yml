@@ -89,7 +89,6 @@ body:
       label: Compiler Flags
       description: Which compiler flags are included?
       options:
-        - http
         - luajit
         - none
       default: 0

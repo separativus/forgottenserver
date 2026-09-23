@@ -192,9 +192,9 @@ bool Actions::registerEvent(Event_ptr event, const pugi::xml_node& node)
 bool Actions::registerLuaEvent(Action* event)
 {
 	Action_ptr action{event};
-	if (!action->getItemIdRange().empty()) {
-		const auto& range = action->getItemIdRange();
-		for (auto id : range) {
+	if (isValid(ids, event)) {
+		const auto& range = getItemIdRange(event);
+		for (auto& id : range) {
 			auto result = useItemMap.emplace(id, *action);
 			if (!result.second) {
 				std::cout << "[Warning - Actions::registerLuaEvent] Duplicate registered item with id: " << id
@@ -202,9 +202,9 @@ bool Actions::registerLuaEvent(Action* event)
 			}
 		}
 		return true;
-	} else if (!action->getUniqueIdRange().empty()) {
-		const auto& range = action->getUniqueIdRange();
-		for (auto id : range) {
+	} else if (isValid(uids, event)) {
+		const auto& range = getUniqueIdRange(event);
+		for (auto& id : range) {
 			auto result = uniqueItemMap.emplace(id, *action);
 			if (!result.second) {
 				std::cout << "[Warning - Actions::registerLuaEvent] Duplicate registered item with uid: " << id
@@ -212,9 +212,9 @@ bool Actions::registerLuaEvent(Action* event)
 			}
 		}
 		return true;
-	} else if (!action->getActionIdRange().empty()) {
-		const auto& range = action->getActionIdRange();
-		for (auto id : range) {
+	} else if (isValid(aids, event)) {
+		const auto& range = getActionIdRange(event);
+		for (auto& id : range) {
 			auto result = actionItemMap.emplace(id, *action);
 			if (!result.second) {
 				std::cout << "[Warning - Actions::registerLuaEvent] Duplicate registered item with aid: " << id
@@ -317,29 +317,7 @@ ReturnValue Actions::internalUseItem(Player* player, const Position& pos, uint8_
 			if (item->isRemoved()) {
 				return RETURNVALUE_CANNOTUSETHISOBJECT;
 			}
-		} else if (action->function && action->function(player, item, pos, nullptr, pos, isHotkey)) {
-			return RETURNVALUE_NOERROR;
 		}
-	}
-
-	if (BedItem* bed = item->getBed()) {
-		if (!bed->canUse(player)) {
-			if (!bed->getHouse()) {
-				return RETURNVALUE_YOUCANNOTUSETHISBED;
-			}
-
-			if (!player->isPremium()) {
-				return RETURNVALUE_YOUNEEDPREMIUMACCOUNT;
-			}
-			return RETURNVALUE_CANNOTUSETHISOBJECT;
-		}
-
-		if (bed->trySleep(player)) {
-			player->setBedItem(bed);
-			g_game.sendOfflineTrainingDialog(player);
-		}
-
-		return RETURNVALUE_NOERROR;
 	}
 
 	if (Container* container = item->getContainer()) {
@@ -445,11 +423,6 @@ bool Actions::useItem(Player* player, const Position& pos, uint8_t index, Item* 
 	}
 
 	ReturnValue ret = internalUseItem(player, pos, index, item, isHotkey);
-	if (ret == RETURNVALUE_YOUCANNOTUSETHISBED) {
-		g_game.internalCreatureSay(player, TALKTYPE_MONSTER_SAY, getReturnMessage(ret), false);
-		return false;
-	}
-
 	if (ret != RETURNVALUE_NOERROR) {
 		player->sendCancelMessage(ret);
 		return false;
@@ -505,7 +478,7 @@ bool Actions::useItemEx(Player* player, const Position& fromPos, const Position&
 }
 
 Action::Action(LuaScriptInterface* interface) :
-    Event(interface), function(nullptr), allowFarUse(false), checkFloor(true), checkLineOfSight(true)
+    Event(interface), allowFarUse(false), checkFloor(true), checkLineOfSight(true)
 {}
 
 bool Action::configureEvent(const pugi::xml_node& node)
@@ -528,31 +501,12 @@ bool Action::configureEvent(const pugi::xml_node& node)
 	return true;
 }
 
-namespace {
-
-bool enterMarket(Player* player, Item*, const Position&, Thing*, const Position&, bool)
-{
-	player->sendMarketEnter();
-	return true;
-}
-
-} // namespace
-
 bool Action::loadFunction(const pugi::xml_attribute& attr, bool isScripted)
 {
-	const char* functionName = attr.as_string();
-	if (caseInsensitiveEqual(functionName, "market")) {
-		function = enterMarket;
-	} else {
-		if (!isScripted) {
-			std::cout << "[Warning - Action::loadFunction] Function \"" << functionName << "\" does not exist."
-			          << std::endl;
-			return false;
-		}
-	}
-
 	if (!isScripted) {
-		scripted = false;
+		std::cout << "[Warning - Action::loadFunction] Function \"" << attr.as_string() << "\" does not exist."
+		          << std::endl;
+		return false;
 	}
 	return true;
 }

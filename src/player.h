@@ -16,7 +16,6 @@
 
 class DepotChest;
 class House;
-struct Mount;
 class NetworkMessage;
 class Npc;
 class Party;
@@ -114,17 +113,6 @@ public:
 
 	CreatureType_t getType() const override { return CREATURETYPE_PLAYER; }
 
-	uint16_t getRandomMount() const;
-	uint16_t getCurrentMount() const;
-	void setCurrentMount(uint16_t mountId);
-	bool isMounted() const { return defaultOutfit.lookMount != 0; }
-	bool toggleMount(bool mount);
-	bool tameMount(uint16_t mountId);
-	bool untameMount(uint16_t mountId);
-	bool hasMount(const Mount* mount) const;
-	bool hasMounts() const;
-	void dismount();
-
 	void sendFYIBox(const std::string& message)
 	{
 		if (client) {
@@ -147,21 +135,6 @@ public:
 
 	uint16_t getStaminaMinutes() const { return staminaMinutes; }
 
-	bool addOfflineTrainingTries(skills_t skill, uint64_t tries);
-
-	void addOfflineTrainingTime(int32_t addTime)
-	{
-		offlineTrainingTime = std::min<int32_t>(12 * 3600 * 1000, offlineTrainingTime + addTime);
-	}
-	void removeOfflineTrainingTime(int32_t removeTime)
-	{
-		offlineTrainingTime = std::max<int32_t>(0, offlineTrainingTime - removeTime);
-	}
-	int32_t getOfflineTrainingTime() const { return offlineTrainingTime; }
-
-	int32_t getOfflineTrainingSkill() const { return offlineTrainingSkill; }
-	void setOfflineTrainingSkill(int32_t skill) { offlineTrainingSkill = skill; }
-
 	uint64_t getBankBalance() const { return bankBalance; }
 	void setBankBalance(uint64_t balance) { bankBalance = balance; }
 
@@ -181,10 +154,6 @@ public:
 
 	void setLastWalkthroughAttempt(int64_t walkthroughAttempt) { lastWalkthroughAttempt = walkthroughAttempt; }
 	void setLastWalkthroughPosition(Position walkthroughPosition) { lastWalkthroughPosition = walkthroughPosition; }
-
-	Inbox* getInbox() const { return inbox; }
-
-	StoreInbox* getStoreInbox() const { return storeInbox; }
 
 	uint32_t getClientIcons() const;
 
@@ -222,9 +191,6 @@ public:
 
 	bool hasFlag(PlayerFlags value) const { return (group->flags & value) != 0; }
 
-	BedItem* getBedItem() { return bedItem; }
-	void setBedItem(BedItem* b) { bedItem = b; }
-
 	void addBlessing(uint8_t blessing) { blessings.set(blessing); }
 	void removeBlessing(uint8_t blessing) { blessings.reset(blessing); }
 	bool hasBlessing(uint8_t blessing) const { return blessings.test(blessing); }
@@ -252,9 +218,6 @@ public:
 
 	void setGroup(Group* newGroup) { group = newGroup; }
 	Group* getGroup() const { return group; }
-
-	void setInMarket(bool value) { inMarket = value; }
-	bool isInMarket() const { return inMarket; }
 
 	int32_t getIdleTime() const { return idleTime; }
 
@@ -295,10 +258,6 @@ public:
 	const Position& getTemplePosition() const { return town->getTemplePosition(); }
 	Town* getTown() const { return town; }
 	void setTown(Town* town) { this->town = town; }
-
-	void clearModalWindows();
-	bool hasModalWindowOpen(uint32_t modalWindowId) const;
-	void onModalWindowHandled(uint32_t modalWindowId);
 
 	bool isPushable() const override;
 	uint32_t isMuted() const;
@@ -715,7 +674,6 @@ public:
 			client->sendSupplyUsed(clientId);
 		}
 	}
-	void sendModalWindow(const ModalWindow& modalWindow);
 
 	// container
 	void sendAddContainerItem(const Container* container, const Item* item);
@@ -860,12 +818,6 @@ public:
 		}
 	}
 	void sendPing();
-	void sendPingBack() const
-	{
-		if (client) {
-			client->sendPingBack();
-		}
-	}
 	void sendStats();
 
 	void sendExperienceTracker(int64_t rawExp, int64_t finalExp) const
@@ -942,51 +894,6 @@ public:
 			client->sendCloseShop();
 		}
 	}
-	void sendMarketEnter() const
-	{
-		if (client) {
-			client->sendMarketEnter();
-		}
-	}
-	void sendMarketLeave()
-	{
-		inMarket = false;
-		if (client) {
-			client->sendMarketLeave();
-		}
-	}
-	void sendMarketBrowseItem(uint16_t itemId, const MarketOfferList& buyOffers,
-	                          const MarketOfferList& sellOffers) const
-	{
-		if (client) {
-			client->sendMarketBrowseItem(itemId, buyOffers, sellOffers);
-		}
-	}
-	void sendMarketBrowseOwnOffers(const MarketOfferList& buyOffers, const MarketOfferList& sellOffers) const
-	{
-		if (client) {
-			client->sendMarketBrowseOwnOffers(buyOffers, sellOffers);
-		}
-	}
-	void sendMarketBrowseOwnHistory(const HistoryMarketOfferList& buyOffers,
-	                                const HistoryMarketOfferList& sellOffers) const
-	{
-		if (client) {
-			client->sendMarketBrowseOwnHistory(buyOffers, sellOffers);
-		}
-	}
-	void sendMarketAcceptOffer(const MarketOfferEx& offer) const
-	{
-		if (client) {
-			client->sendMarketAcceptOffer(offer);
-		}
-	}
-	void sendMarketCancelOffer(const MarketOfferEx& offer) const
-	{
-		if (client) {
-			client->sendMarketCancelOffer(offer);
-		}
-	}
 	void sendTradeItemRequest(const std::string& traderName, const Item* item, bool ack) const
 	{
 		if (client) {
@@ -1015,12 +922,6 @@ public:
 	{
 		if (client) {
 			client->sendOutfitWindow();
-		}
-	}
-	void sendPodiumWindow(const Item* item)
-	{
-		if (client) {
-			client->sendPodiumWindow(item);
 		}
 	}
 	void sendCloseContainer(uint8_t cid)
@@ -1176,13 +1077,11 @@ private:
 	std::map<uint32_t, DepotChest*> depotChests;
 
 	std::map<uint16_t, uint8_t> outfits;
-	std::unordered_set<uint16_t> mounts;
 	GuildWarVector guildWarVector;
 
 	std::list<ShopInfo> shopItemList;
 
 	std::forward_list<Party*> invitePartyList;
-	std::forward_list<uint32_t> modalWindows;
 	std::forward_list<std::string> learnedInstantSpellList;
 	std::forward_list<Condition*>
 	    storedConditionList; // TODO: This variable is only temporarily used when logging in, get rid of it somehow
@@ -1206,18 +1105,15 @@ private:
 	int64_t lastFailedFollow = 0;
 	int64_t skullTicks = 0;
 	int64_t lastWalkthroughAttempt = 0;
-	int64_t lastToggleMount = 0;
 	int64_t lastPing;
 	int64_t lastPong;
 	int64_t nextAction = 0;
 
 	ProtocolGame_ptr client;
 	Connection::Address lastIP = {};
-	BedItem* bedItem = nullptr;
 	Guild_ptr guild = nullptr;
 	GuildRank_ptr guildRank = nullptr;
 	Group* group = nullptr;
-	Inbox* inbox;
 	Item* tradeItem = nullptr;
 	Item* inventory[CONST_SLOT_LAST + 1] = {};
 	Item* writeItem = nullptr;
@@ -1228,7 +1124,6 @@ private:
 	SchedulerTask* walkTask = nullptr;
 	Town* town = nullptr;
 	Vocation* vocation = nullptr;
-	StoreInbox* storeInbox = nullptr;
 	DepotLocker_ptr depotLocker = nullptr;
 
 	uint32_t inventoryWeight = 0;
@@ -1259,11 +1154,8 @@ private:
 	int32_t MessageBufferCount = 0;
 	int32_t bloodHitCount = 0;
 	int32_t shieldBlockCount = 0;
-	int32_t offlineTrainingSkill = -1;
-	int32_t offlineTrainingTime = 0;
 	int32_t idleTime = 0;
 
-	uint16_t lastStatsTrainingTime = 0;
 	uint16_t staminaMinutes = 2520;
 	uint16_t maxWriteLen = 0;
 	uint16_t clientExpDisplay = 100;
@@ -1284,8 +1176,6 @@ private:
 
 	bool chaseMode = false;
 	bool secureMode = false;
-	bool inMarket = false;
-	bool wasMounted = false;
 	bool ghostMode = false;
 	bool pzLocked = false;
 	bool npcChannelOpen = false;
@@ -1294,7 +1184,6 @@ private:
 	bool isConnecting = false;
 	bool addAttackSkillPoint = false;
 	bool inventoryAbilities[CONST_SLOT_LAST + 1] = {};
-	bool randomizeMount = false;
 
 	static uint32_t playerAutoID;
 	static uint32_t playerIDLimit;

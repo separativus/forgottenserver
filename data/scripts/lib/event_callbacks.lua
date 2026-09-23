@@ -43,7 +43,6 @@ ec.onLook = {[5] = 1}
 ec.onLookInBattleList = {[4] = 1}
 ec.onLookInTrade = {[5] = 1}
 ec.onLookInShop = {[4] = 1}
-ec.onLookInMarket = {}
 ec.onTradeRequest = {}
 ec.onTradeAccept = {}
 ec.onTradeCompleted = {}
@@ -57,7 +56,6 @@ ec.onTurn = {}
 ec.onGainExperience = {[3] = 1}
 ec.onLoseExperience = {[2] = 1}
 ec.onGainSkillTries = {[3] = 1}
-ec.onWrapItem = {}
 ec.onInventoryUpdate = {}
 ec.onSpellCheck = {}
 -- Monster

@@ -8,7 +8,6 @@
 #include "condition.h"
 #include "game.h"
 #include "iologindata.h"
-#include "scheduler.h"
 
 extern Game g_game;
 
@@ -74,90 +73,6 @@ BedItem* BedItem::getNextBedItem() const
 		return nullptr;
 	}
 	return tile->getBedItem();
-}
-
-bool BedItem::canUse(Player* player)
-{
-	if (!player || !house || !player->isPremium() || player->getZone() != ZONE_PROTECTION) {
-		return false;
-	}
-
-	if (sleeperGUID == 0) {
-		return true;
-	}
-
-	if (house->getHouseAccessLevel(player) == HOUSE_OWNER) {
-		return true;
-	}
-
-	Player sleeper(nullptr);
-	if (!IOLoginData::loadPlayerById(&sleeper, sleeperGUID)) {
-		return false;
-	}
-
-	if (house->getHouseAccessLevel(&sleeper) > house->getHouseAccessLevel(player)) {
-		return false;
-	}
-	return true;
-}
-
-bool BedItem::trySleep(Player* player)
-{
-	if (!house || player->isRemoved()) {
-		return false;
-	}
-
-	if (sleeperGUID != 0) {
-		if (Item::items[id].transformToFree != 0 && house->getOwner() == player->getGUID()) {
-			wakeUp(nullptr);
-		}
-
-		g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF);
-		return false;
-	}
-	return true;
-}
-
-bool BedItem::sleep(Player* player)
-{
-	if (!house) {
-		return false;
-	}
-
-	if (sleeperGUID != 0) {
-		return false;
-	}
-
-	BedItem* nextBedItem = getNextBedItem();
-
-	internalSetSleeper(player);
-
-	if (nextBedItem) {
-		nextBedItem->internalSetSleeper(player);
-	}
-
-	// update the bedSleepersMap
-	g_game.setBedSleeper(this, player->getGUID());
-
-	// make the player walk onto the bed
-	g_game.map.moveCreature(*player, *getTile());
-
-	// display 'Zzzz'/sleep effect — CONST_ME_SLEEP (33) is past the 7.x dat, so
-	// the sleeper vanishes with the teleport shimmer instead
-	g_game.addMagicEffect(player->getPosition(), CONST_ME_TELEPORT);
-
-	// kick player after he sees himself walk onto the bed and it change id
-	g_scheduler.addEvent(createSchedulerTask(SCHEDULER_MINTICKS,
-	                                         [playerID = player->getID()]() { g_game.kickPlayer(playerID, false); }));
-
-	// change self and partner's appearance
-	updateAppearance(player);
-
-	if (nextBedItem) {
-		nextBedItem->updateAppearance(player);
-	}
-
-	return true;
 }
 
 void BedItem::wakeUp(Player* player)

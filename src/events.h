@@ -50,7 +50,6 @@ class Events
 		int32_t playerOnLookInBattleList = -1;
 		int32_t playerOnLookInTrade = -1;
 		int32_t playerOnLookInShop = -1;
-		int32_t playerOnLookInMarket = -1;
 		int32_t playerOnMoveItem = -1;
 		int32_t playerOnItemMoved = -1;
 		int32_t playerOnMoveCreature = -1;
@@ -61,12 +60,9 @@ class Events
 		int32_t playerOnTradeRequest = -1;
 		int32_t playerOnTradeAccept = -1;
 		int32_t playerOnTradeCompleted = -1;
-		int32_t playerOnPodiumRequest = -1;
-		int32_t playerOnPodiumEdit = -1;
 		int32_t playerOnGainExperience = -1;
 		int32_t playerOnLoseExperience = -1;
 		int32_t playerOnGainSkillTries = -1;
-		int32_t playerOnWrapItem = -1;
 		int32_t playerOnInventoryUpdate = -1;
 		int32_t playerOnNetworkMessage = -1;
 		int32_t playerOnSpellCheck = -1;
@@ -106,7 +102,6 @@ public:
 	void eventPlayerOnLookInBattleList(Player* player, Creature* creature, int32_t lookDistance);
 	void eventPlayerOnLookInTrade(Player* player, Player* partner, Item* item, int32_t lookDistance);
 	bool eventPlayerOnLookInShop(Player* player, const ItemType* itemType, uint8_t count);
-	bool eventPlayerOnLookInMarket(Player* player, const ItemType* itemType);
 	ReturnValue eventPlayerOnMoveItem(Player* player, Item* item, uint16_t count, const Position& fromPosition,
 	                                  const Position& toPosition, Cylinder* fromCylinder, Cylinder* toCylinder);
 	void eventPlayerOnItemMoved(Player* player, Item* item, uint16_t count, const Position& fromPosition,
@@ -122,13 +117,9 @@ public:
 	bool eventPlayerOnTradeRequest(Player* player, Player* target, Item* item);
 	bool eventPlayerOnTradeAccept(Player* player, Player* target, Item* item, Item* targetItem);
 	void eventPlayerOnTradeCompleted(Player* player, Player* target, Item* item, Item* targetItem, bool isSuccess);
-	void eventPlayerOnPodiumRequest(Player* player, Item* item);
-	void eventPlayerOnPodiumEdit(Player* player, Item* item, const Outfit_t& outfit, bool podiumVisible,
-	                             Direction direction);
 	void eventPlayerOnGainExperience(Player* player, Creature* source, uint64_t& exp, uint64_t rawExp, bool sendText);
 	void eventPlayerOnLoseExperience(Player* player, uint64_t& exp);
 	void eventPlayerOnGainSkillTries(Player* player, skills_t skill, uint64_t& tries);
-	void eventPlayerOnWrapItem(Player* player, Item* item);
 	void eventPlayerOnInventoryUpdate(Player* player, Item* item, slots_t slot, bool equip);
 	void eventPlayerOnNetworkMessage(Player* player, uint8_t recvByte, NetworkMessage* msg);
 	bool eventPlayerOnSpellCheck(Player* player, const Spell* spell);

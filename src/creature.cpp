@@ -729,10 +729,6 @@ void Creature::onDeath()
 
 	if (master) {
 		setMaster(nullptr);
-
-		if (dynamic_cast<Monster*>(this) != nullptr) {
-			decrementReferenceCounter();
-		}
 	}
 
 	if (droppedCorpse) {

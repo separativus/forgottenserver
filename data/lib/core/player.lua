@@ -368,25 +368,6 @@ function Player.addAddonToAllOutfits(self, addon)
 	end
 end
 
-function Player.addAllMounts(self)
-	local mounts = Game.getMounts()
-	for mount = 1, #mounts do
-		self:addMount(mounts[mount].id)
-	end
-end
-
-function Player.setSpecialContainersAvailable(self, available)
-	local msg = NetworkMessage()
-	msg:addByte(0x2A)
-
-	msg:addByte(0x00) -- stash
-	msg:addByte(available and 0x01 or 0x00) -- market
-
-	msg:sendToPlayer(self)
-	msg:delete()
-	return true
-end
-
 function Player.addBankBalance(self, amount)
 	self:setBankBalance(self:getBankBalance() + amount)
 end
@@ -702,26 +683,6 @@ function Player.getAccountStorageValue(self, key)
 	return Game.getAccountStorageValue(self:getAccountId(), key)
 end
 
-function Player.sendWorldLight(self, color, level)
-	local msg = NetworkMessage()
-	msg:addByte(0x82)
-	msg:addByte(self:getGroup():getAccess() and 0xFF or level)
-	msg:addByte(color)
-	msg:sendToPlayer(self)
-	msg:delete()
-	return true
-end
-
-function Player.sendWorldTime(self, time)
-	local msg = NetworkMessage()
-	msg:addByte(0xEF)
-	msg:addByte(time / 60) -- hour
-	msg:addByte(time % 60) -- min
-	msg:sendToPlayer(self)
-	msg:delete()
-	return true
-end
-
 function Player.sendHotkeyPreset(self)
 	local msg = NetworkMessage()
 	msg:addByte(0x9D)
@@ -739,13 +700,4 @@ function Player.disableLoginMusic(self)
 	msg:sendToPlayer(self)
 	msg:delete()
 	return true
-end
-
-function Player.sendInboxItems(self, items, containerId)
-	local inbox = self:getInbox()
-	local container = Game.createItem(containerId, 1)
-	for _, item in pairs(items) do
-		container:addItem(item.item, item.count)
-	end
-	container:moveTo(inbox)
 end

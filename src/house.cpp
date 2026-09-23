@@ -7,9 +7,9 @@
 
 #include "bed.h"
 #include "configmanager.h"
+#include "depotchest.h"
 #include "game.h"
 #include "housetile.h"
-#include "inbox.h"
 #include "iologindata.h"
 #include "pugicast.h"
 
@@ -66,6 +66,7 @@ void House::setOwner(uint32_t guid, bool updateDatabase /* = true*/, Player* pla
 		// clean access lists
 		owner = 0;
 		ownerAccountId = 0;
+		ownerName.clear();
 		setAccessList(SUBOWNER_LIST, "");
 		setAccessList(GUEST_LIST, "");
 
@@ -212,6 +213,17 @@ bool House::transferToDepot(Player* player) const
 		return false;
 	}
 
+	// what the house held goes to the depot of the house's town
+	const Town* town = g_game.map.towns.getTown(townId);
+	if (!town) {
+		town = player->getTown();
+	}
+
+	DepotChest* depotChest = player->getDepotChest(town->getDepotId(), true);
+	if (!depotChest) {
+		return false;
+	}
+
 	ItemList moveItemList;
 	for (HouseTile* tile : houseTiles) {
 		if (const TileItemVector* items = tile->getItemList()) {
@@ -231,8 +243,8 @@ bool House::transferToDepot(Player* player) const
 	}
 
 	for (Item* item : moveItemList) {
-		g_game.internalMoveItem(item->getParent(), player->getInbox(), INDEX_WHEREEVER, item, item->getItemCount(),
-		                        nullptr, FLAG_NOLIMIT);
+		g_game.internalMoveItem(item->getParent(), depotChest->getDeliveryContainer(), INDEX_WHEREEVER, item,
+		                        item->getItemCount(), nullptr, FLAG_NOLIMIT);
 	}
 	return true;
 }
@@ -725,7 +737,9 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 				letter->setText(fmt::format(
 				    "Warning! \nThe {:s} rent of {:d} gold for your house \"{:s}\" is payable. Have it within {:d} days or you will lose this house.",
 				    period, house->getRent(), house->getName(), daysLeft));
-				g_game.internalAddItem(player.getInbox(), letter, INDEX_WHEREEVER, FLAG_NOLIMIT);
+				if (DepotChest* depotChest = player.getDepotChest(town->getDepotId(), true)) {
+					g_game.internalAddItem(depotChest->getDeliveryContainer(), letter, INDEX_WHEREEVER, FLAG_NOLIMIT);
+				}
 				house->setPayRentWarnings(house->getPayRentWarnings() + 1);
 			} else {
 				house->setOwner(0, true, &player);

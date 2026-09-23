@@ -17,13 +17,6 @@
     "pugixml"
   ],
   "features": {
-    "http": {
-      "description": "Enable HTTP support",
-      "dependencies": [
-        "boost-beast",
-        "boost-json"
-      ]
-    },
     "lua": {
       "description": "Use Lua instead of LuaJIT",
       "dependencies": [

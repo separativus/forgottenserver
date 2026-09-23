@@ -5,7 +5,10 @@
 
 #include "depotchest.h"
 
+#include "game.h"
 #include "tools.h"
+
+extern Game g_game;
 
 DepotChest::DepotChest(uint16_t type, bool paginated /*= true*/) :
     Container{type, items[type].maxItems, true, paginated}
@@ -41,6 +44,43 @@ ReturnValue DepotChest::queryAdd(int32_t index, const Thing& thing, uint32_t cou
 	}
 
 	return Container::queryAdd(index, thing, count, flags, actor);
+}
+
+Container* DepotChest::getDeliveryContainer()
+{
+	if (hasPagination() || size() < capacity()) {
+		return this;
+	}
+
+	if (Item* first = getItemByIndex(0); first && first->getID() == ITEM_BACKPACK) {
+		Container* backpack = first->getContainer();
+		if (backpack->size() < backpack->capacity()) {
+			return backpack;
+		}
+	}
+
+	Item* backpack = Item::CreateItem(ITEM_BACKPACK);
+	if (!backpack) {
+		return this;
+	}
+
+	Item* last = getItemByIndex(size() - 1);
+	g_game.internalMoveItem(this, backpack->getContainer(), INDEX_WHEREEVER, last, last->getItemCount(), nullptr,
+	                        FLAG_NOLIMIT);
+	g_game.internalAddItem(this, backpack, INDEX_WHEREEVER, FLAG_NOLIMIT);
+	return backpack->getContainer();
+}
+
+void DepotChest::packOverflow()
+{
+	while (size() > capacity()) {
+		Container* container = getDeliveryContainer();
+		Item* last = getItemByIndex(size() - 1);
+		if (container == this || g_game.internalMoveItem(this, container, INDEX_WHEREEVER, last, last->getItemCount(),
+		                                                 nullptr, FLAG_NOLIMIT) != RETURNVALUE_NOERROR) {
+			break;
+		}
+	}
 }
 
 void DepotChest::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t)

@@ -118,7 +118,6 @@ do
 	rawgetmetatable("Item").__index = ItemIndex
 	rawgetmetatable("Container").__index = ItemIndex
 	rawgetmetatable("Teleport").__index = ItemIndex
-	rawgetmetatable("Podium").__index = ItemIndex
 end
 
 do
@@ -208,10 +207,6 @@ do
 		elseif key == "onAdvance" then
 			self:type("advance")
 			self:onAdvance(value)
-			return
-		elseif key == "onModalWindow" then
-			self:type("modalwindow")
-			self:onModalWindow(value)
 			return
 		elseif key == "onTextEdit" then
 			self:type("textedit")
@@ -533,7 +528,6 @@ function getPlayerDepotItems(cid, depotId) local p = Player(cid) return p and p:
 function getPlayerStamina(cid) local p = Player(cid) return p and p:getStamina() or false end
 function getPlayerSkullType(cid) local p = Player(cid) return p and p:getSkull() or false end
 function getPlayerLossPercent(cid) local p = Player(cid) return p and p:getDeathPenalty() or false end
-function getPlayerMount(cid, mountId) local p = Player(cid) return p and p:hasMount(mountId) or false end
 function getPlayerPremiumDays(cid) local p = Player(cid) return p and p:getPremiumDays() or false end
 function getPlayerBlessing(cid, blessing) local p = Player(cid) return p and p:hasBlessing(blessing) or false end
 function getPlayerFlagValue(cid, flag) local p = Player(cid) return p and p:hasFlag(flag) or false end
@@ -741,7 +735,6 @@ doPlayerSetGroupId = setPlayerGroupId
 function doPlayerSetSex(cid, sex) local p = Player(cid) return p and p:setSex(sex) or false end
 function doPlayerSetGuildLevel(cid, level) local p = Player(cid) return p and p:setGuildLevel(level) or false end
 function doPlayerSetGuildNick(cid, nick) local p = Player(cid) return p and p:setGuildNick(nick) or false end
-function doPlayerSetOfflineTrainingSkill(cid, skillId) local p = Player(cid) return p and p:setOfflineTrainingSkill(skillId) or false end
 function doShowTextDialog(cid, itemId, text) local p = Player(cid) return p and p:showTextDialog(itemId, text) or false end
 function doPlayerAddItemEx(cid, uid, ...) local p = Player(cid) return p and p:addItemEx(Item(uid), ...) or false end
 function doPlayerRemoveItem(cid, itemid, count, ...) local p = Player(cid) return p and p:removeItem(itemid, count, ...) or false end
@@ -763,8 +756,6 @@ end
 doPlayerRemoveOutfit = doPlayerRemOutfit
 function doPlayerAddAddons(cid, addon) local p = Player(cid) return p and p:addAddonToAllOutfits(addon) or false end
 function canPlayerWearOutfit(cid, lookType, addons) local p = Player(cid) return p and p:hasOutfit(lookType, addons) or false end
-function doPlayerAddMount(cid, mountId) local p = Player(cid) return p and p:addMount(mountId) or false end
-function doPlayerRemoveMount(cid, mountId) local p = Player(cid) return p and p:removeMount(mountId) or false end
 function doPlayerSendOutfitWindow(cid) local p = Player(cid) return p and p:sendOutfitWindow() or false end
 function doPlayerSendCancel(cid, text) local p = Player(cid) return p and p:sendCancelMessage(text) or false end
 function doPlayerFeed(cid, food) local p = Player(cid) return p and p:feed(food) or false end
@@ -1637,17 +1628,6 @@ do
 
 	function getStatName(stat)
 		return stats[stat] or 'unknown'
-	end
-end
-
-do
-	local mounts = {}
-	for _, mountData in pairs(Game.getMounts()) do
-		mounts[mountData.clientId] = mountData.name
-	end
-
-	function getMountNameByLookType(lookType)
-		return mounts[lookType]
 	end
 end
 
