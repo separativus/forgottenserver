@@ -40,8 +40,9 @@ public:
 
 private:
 	std::atomic<uint32_t> lastEventId{0};
-	std::unordered_map<uint32_t, boost::asio::steady_timer> eventIdTimerMap;
+	// io_context must outlive the timers bound to it (members are destroyed in reverse order)
 	boost::asio::io_context io_context;
+	std::unordered_map<uint32_t, boost::asio::steady_timer> eventIdTimerMap;
 	boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work{io_context.get_executor()};
 };
 

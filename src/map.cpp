@@ -728,7 +728,8 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 			}
 			dirCount = fpp.allowDiagonal ? 5 : 3;
 		} else {
-			dirCount = 8;
+			// the first four entries are the orthogonal ones
+			dirCount = fpp.allowDiagonal ? 8 : 4;
 			neighbors = *allNeighbors;
 		}
 
