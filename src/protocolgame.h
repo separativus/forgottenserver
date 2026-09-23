@@ -299,6 +299,9 @@ private:
 
 	bool debugAssertSent = false;
 	bool acceptPackets = false;
+	// set once the client has been handed GameDoubleHealth (see sendAddCreature):
+	// hit points and mana then leave as u32 instead of the 7.x u16 pairs.
+	bool wideStats = false;
 };
 
 #endif // FS_PROTOCOLGAME_H
