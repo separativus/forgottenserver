@@ -1748,7 +1748,7 @@ bool ConditionLight::setParam(ConditionParam_t param, int32_t value)
 				std::cout << "[ConditionLight::setParam] trying to set invalid light value: " << value
 				          << " defaulting to 1" << std::endl;
 			}
-			lightInfo.level = std::max(1, value);
+			lightInfo.level = std::clamp(value, 1, 0xFF); // uint8_t: 256 would wrap to 0 again
 			return true;
 		}
 
