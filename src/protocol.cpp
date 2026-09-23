@@ -80,6 +80,26 @@ bool Protocol::RSA_decrypt(NetworkMessage& msg)
 	return msg.getByte() == 0;
 }
 
+bool Protocol::readXTEAKey(NetworkMessage& msg, uint16_t version)
+{
+	if (version <= 760) {
+		return true;
+	}
+
+	if (!RSA_decrypt(msg)) {
+		return false;
+	}
+
+	xtea::key xteaKey;
+	xteaKey[0] = msg.get<uint32_t>();
+	xteaKey[1] = msg.get<uint32_t>();
+	xteaKey[2] = msg.get<uint32_t>();
+	xteaKey[3] = msg.get<uint32_t>();
+	enableXTEAEncryption();
+	setXTEAKey(xteaKey);
+	return true;
+}
+
 OutputMessage_ptr Protocol::getOutputBuffer(int32_t size)
 {
 	// dispatcher thread

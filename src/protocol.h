@@ -55,6 +55,11 @@ protected:
 
 	static bool RSA_decrypt(NetworkMessage& msg);
 
+	// 7.61+ wraps the session's XTEA key in an RSA envelope and every packet
+	// after it is encrypted; 7.60 has neither and stays plaintext. False when
+	// the envelope does not decrypt.
+	bool readXTEAKey(NetworkMessage& msg, uint16_t version);
+
 	void setRawMessages(bool value) { rawMessages = value; }
 
 	virtual void release() {}

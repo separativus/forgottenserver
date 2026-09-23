@@ -15,7 +15,6 @@ class Door;
 class MagicField;
 class Mailbox;
 class Player;
-class Podium;
 class Teleport;
 class TrashHolder;
 
@@ -516,8 +515,6 @@ public:
 	virtual const MagicField* getMagicField() const { return nullptr; }
 	virtual BedItem* getBed() { return nullptr; }
 	virtual const BedItem* getBed() const { return nullptr; }
-	virtual Podium* getPodium() { return nullptr; }
-	virtual const Podium* getPodium() const { return nullptr; }
 
 	const std::string& getStrAttr(itemAttrTypes type) const
 	{
@@ -824,7 +821,6 @@ public:
 		const ItemType& it = items[id];
 		return it.rotatable && it.rotateTo;
 	}
-	bool isPodium() const { return items[id].isPodium(); }
 	bool hasWalkStack() const { return items[id].walkStack; }
 	bool isSupply() const { return items[id].isSupply(); }
 

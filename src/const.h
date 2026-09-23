@@ -332,26 +332,6 @@ const uint8_t clientToServerFluidMap[] = {
     FLUID_FRUITJUICE, FLUID_COCONUTMILK, FLUID_TEA,  FLUID_MEAD, FLUID_INK,
 };
 
-enum ClientFluidTypes_t : uint8_t
-{
-	CLIENTFLUID_EMPTY = 0,
-	CLIENTFLUID_BLUE = 1,
-	CLIENTFLUID_PURPLE = 2,
-	CLIENTFLUID_BROWN_1 = 3,
-	CLIENTFLUID_BROWN_2 = 4,
-	CLIENTFLUID_RED = 5,
-	CLIENTFLUID_GREEN = 6,
-	CLIENTFLUID_BROWN = 7,
-	CLIENTFLUID_YELLOW = 8,
-	CLIENTFLUID_WHITE = 9,
-	CLIENTFLUID_BLACK = 18,
-};
-
-const uint8_t fluidMap[] = {
-    CLIENTFLUID_EMPTY,  CLIENTFLUID_BLUE,  CLIENTFLUID_RED,    CLIENTFLUID_BROWN_1, CLIENTFLUID_GREEN,
-    CLIENTFLUID_YELLOW, CLIENTFLUID_WHITE, CLIENTFLUID_PURPLE, CLIENTFLUID_BLACK,
-};
-
 enum SquareColor_t : uint8_t
 {
 	SQ_COLOR_BLACK = 0,
@@ -624,13 +604,6 @@ enum PlayerFlags : uint64_t
 	PlayerFlag_IgnoreSendPrivateCheck = static_cast<uint64_t>(1) << 39,
 };
 
-enum PodiumFlags : uint8_t
-{
-	PODIUM_SHOW_PLATFORM = 0, // show the platform below the outfit
-	PODIUM_SHOW_OUTFIT = 1,   // show outfit
-	PODIUM_SHOW_MOUNT = 2     // show mount
-};
-
 enum ReloadTypes_t : uint8_t
 {
 	RELOAD_TYPE_ALL,
@@ -643,7 +616,6 @@ enum ReloadTypes_t : uint8_t
 	RELOAD_TYPE_GLOBALEVENTS,
 	RELOAD_TYPE_ITEMS,
 	RELOAD_TYPE_MONSTERS,
-	RELOAD_TYPE_MOUNTS,
 	RELOAD_TYPE_MOVEMENTS,
 	RELOAD_TYPE_NPCS,
 	RELOAD_TYPE_QUESTS,

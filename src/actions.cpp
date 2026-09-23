@@ -322,26 +322,6 @@ ReturnValue Actions::internalUseItem(Player* player, const Position& pos, uint8_
 		}
 	}
 
-	if (BedItem* bed = item->getBed()) {
-		if (!bed->canUse(player)) {
-			if (!bed->getHouse()) {
-				return RETURNVALUE_YOUCANNOTUSETHISBED;
-			}
-
-			if (!player->isPremium()) {
-				return RETURNVALUE_YOUNEEDPREMIUMACCOUNT;
-			}
-			return RETURNVALUE_CANNOTUSETHISOBJECT;
-		}
-
-		if (bed->trySleep(player)) {
-			player->setBedItem(bed);
-			g_game.sendOfflineTrainingDialog(player);
-		}
-
-		return RETURNVALUE_NOERROR;
-	}
-
 	if (Container* container = item->getContainer()) {
 		Container* openContainer;
 
@@ -445,11 +425,6 @@ bool Actions::useItem(Player* player, const Position& pos, uint8_t index, Item* 
 	}
 
 	ReturnValue ret = internalUseItem(player, pos, index, item, isHotkey);
-	if (ret == RETURNVALUE_YOUCANNOTUSETHISBED) {
-		g_game.internalCreatureSay(player, TALKTYPE_MONSTER_SAY, getReturnMessage(ret), false);
-		return false;
-	}
-
 	if (ret != RETURNVALUE_NOERROR) {
 		player->sendCancelMessage(ret);
 		return false;

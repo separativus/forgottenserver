@@ -27,10 +27,6 @@ public:
 	House* getHouse() const { return house; }
 	void setHouse(House* h) { house = h; }
 
-	bool canUse(Player* player);
-
-	bool trySleep(Player* player);
-	bool sleep(Player* player);
 	void wakeUp(Player* player);
 
 	BedItem* getNextBedItem() const;

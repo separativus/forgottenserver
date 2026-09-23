@@ -280,12 +280,10 @@ private:
 	static int luaGameGetBestiary(lua_State* L);
 	static int luaGameGetCurrencyItems(lua_State* L);
 	static int luaGameGetItemTypeByClientId(lua_State* L);
-	static int luaGameGetMountIdByLookType(lua_State* L);
 
 	static int luaGameGetTowns(lua_State* L);
 	static int luaGameGetHouses(lua_State* L);
 	static int luaGameGetOutfits(lua_State* L);
-	static int luaGameGetMounts(lua_State* L);
 	static int luaGameGetVocations(lua_State* L);
 
 	static int luaGameGetGameState(lua_State* L);
@@ -399,34 +397,6 @@ private:
 	static int luaNetworkMessageSkipBytes(lua_State* L);
 	static int luaNetworkMessageSendToPlayer(lua_State* L);
 
-	// ModalWindow
-	static int luaModalWindowCreate(lua_State* L);
-	static int luaModalWindowDelete(lua_State* L);
-
-	static int luaModalWindowGetId(lua_State* L);
-	static int luaModalWindowGetTitle(lua_State* L);
-	static int luaModalWindowGetMessage(lua_State* L);
-
-	static int luaModalWindowSetTitle(lua_State* L);
-	static int luaModalWindowSetMessage(lua_State* L);
-
-	static int luaModalWindowGetButtonCount(lua_State* L);
-	static int luaModalWindowGetChoiceCount(lua_State* L);
-
-	static int luaModalWindowAddButton(lua_State* L);
-	static int luaModalWindowAddChoice(lua_State* L);
-
-	static int luaModalWindowGetDefaultEnterButton(lua_State* L);
-	static int luaModalWindowSetDefaultEnterButton(lua_State* L);
-
-	static int luaModalWindowGetDefaultEscapeButton(lua_State* L);
-	static int luaModalWindowSetDefaultEscapeButton(lua_State* L);
-
-	static int luaModalWindowHasPriority(lua_State* L);
-	static int luaModalWindowSetPriority(lua_State* L);
-
-	static int luaModalWindowSendToPlayer(lua_State* L);
-
 	// Item
 	static int luaItemCreate(lua_State* L);
 
@@ -507,16 +477,6 @@ private:
 
 	static int luaTeleportGetDestination(lua_State* L);
 	static int luaTeleportSetDestination(lua_State* L);
-
-	// Podium
-	static int luaPodiumCreate(lua_State* L);
-
-	static int luaPodiumGetOutfit(lua_State* L);
-	static int luaPodiumSetOutfit(lua_State* L);
-	static int luaPodiumHasFlag(lua_State* L);
-	static int luaPodiumSetFlag(lua_State* L);
-	static int luaPodiumGetDirection(lua_State* L);
-	static int luaPodiumSetDirection(lua_State* L);
 
 	// Creature
 	static int luaCreatureCreate(lua_State* L);
@@ -664,15 +624,6 @@ private:
 	static int luaPlayerGetSpecialSkill(lua_State* L);
 	static int luaPlayerAddSpecialSkill(lua_State* L);
 
-	static int luaPlayerAddOfflineTrainingTime(lua_State* L);
-	static int luaPlayerGetOfflineTrainingTime(lua_State* L);
-	static int luaPlayerRemoveOfflineTrainingTime(lua_State* L);
-
-	static int luaPlayerAddOfflineTrainingTries(lua_State* L);
-
-	static int luaPlayerGetOfflineTrainingSkill(lua_State* L);
-	static int luaPlayerSetOfflineTrainingSkill(lua_State* L);
-
 	static int luaPlayerGetItemCount(lua_State* L);
 	static int luaPlayerGetItemById(lua_State* L);
 
@@ -736,13 +687,6 @@ private:
 	static int luaPlayerHasOutfit(lua_State* L);
 	static int luaPlayerCanWearOutfit(lua_State* L);
 	static int luaPlayerSendOutfitWindow(lua_State* L);
-
-	static int luaPlayerSendEditPodium(lua_State* L);
-
-	static int luaPlayerAddMount(lua_State* L);
-	static int luaPlayerRemoveMount(lua_State* L);
-	static int luaPlayerHasMount(lua_State* L);
-	static int luaPlayerToggleMount(lua_State* L);
 
 	static int luaPlayerGetPremiumEndsAt(lua_State* L);
 	static int luaPlayerSetPremiumEndsAt(lua_State* L);
