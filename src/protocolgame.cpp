@@ -1383,16 +1383,11 @@ void ProtocolGame::parseRuleViolationReport(NetworkMessage& msg)
 
 void ProtocolGame::parseBugReport(NetworkMessage& msg)
 {
-	uint8_t category = msg.getByte();
+	// 7.60/7.72 (Ctrl+Z) send the text only: no category byte, no map position
 	auto message = msg.getString();
 
-	Position position;
-	if (category == BUG_CATEGORY_MAP) {
-		position = msg.getPosition();
-	}
-
 	g_dispatcher.addTask([=, playerID = player->getID(), message = std::string{message}]() {
-		g_game.playerReportBug(playerID, message, position, category);
+		g_game.playerReportBug(playerID, message, Position(), BUG_CATEGORY_OTHER);
 	});
 }
 
