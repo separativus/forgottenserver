@@ -23,6 +23,11 @@
 
 #include <csignal>
 
+#ifndef _WIN32
+#include <execinfo.h>
+#include <unistd.h>
+#endif
+
 extern Scheduler g_scheduler;
 extern DatabaseTasks g_databaseTasks;
 extern Dispatcher g_dispatcher;
@@ -43,6 +48,37 @@ extern LuaEnvironment g_luaEnvironment;
 namespace {
 
 #ifndef _WIN32
+// Runs on the crashing thread: only async-signal-safe calls. Afterwards the default action runs, so the exit status,
+// core dump and container restart stay what they were without this handler.
+void fatalSignalHandler(int signal)
+{
+	const char* marker = "\n*** Fatal signal, backtrace:\n";
+	switch (signal) {
+		case SIGSEGV:
+			marker = "\n*** Fatal signal SIGSEGV, backtrace:\n";
+			break;
+		case SIGABRT:
+			marker = "\n*** Fatal signal SIGABRT, backtrace:\n";
+			break;
+		case SIGFPE:
+			marker = "\n*** Fatal signal SIGFPE, backtrace:\n";
+			break;
+		case SIGBUS:
+			marker = "\n*** Fatal signal SIGBUS, backtrace:\n";
+			break;
+		case SIGILL:
+			marker = "\n*** Fatal signal SIGILL, backtrace:\n";
+			break;
+	}
+	[[maybe_unused]] ssize_t written = write(STDERR_FILENO, marker, strlen(marker));
+
+	void* frames[64];
+	backtrace_symbols_fd(frames, backtrace(frames, 64), STDERR_FILENO);
+
+	std::signal(signal, SIG_DFL);
+	std::raise(signal);
+}
+
 void sigusr1Handler()
 {
 	// Dispatcher thread
@@ -175,6 +211,13 @@ Signals::Signals(boost::asio::io_context& ioc) : set(ioc)
 #ifndef _WIN32
 	set.add(SIGUSR1);
 	set.add(SIGHUP);
+
+	// the first backtrace() loads libgcc; that must not happen inside the handler
+	void* frame;
+	backtrace(&frame, 1);
+	for (int signal : {SIGSEGV, SIGABRT, SIGFPE, SIGBUS, SIGILL}) {
+		std::signal(signal, fatalSignalHandler);
+	}
 #else
 	// This must be a blocking call as Windows calls it in a new thread and terminates the process when the handler
 	// returns (or after 5 seconds, whichever is earlier). On Windows it is called in a new thread.
