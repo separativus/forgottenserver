@@ -375,9 +375,12 @@ void ProtocolGame::logout(bool displayEffect, bool forced)
 					return;
 				}
 
-				if (!player->getTile()->hasFlag(TILESTATE_PROTECTIONZONE) && player->hasCondition(CONDITION_INFIGHT)) {
+				// TibiaFun: the block applies inside protection zones too — the
+				// legacy 7.6 engine knew no PZ exemption, a player who hit a trainer
+				// from inside their house waited the full window there as well.
+				if (player->hasCondition(CONDITION_INFIGHT)) {
 					// TibiaFun #15: scale the logout block with what was fought.
-					// Monsters lock briefly (pzLockedMonster), players for the full
+					// Monsters lock for pzLockedMonster, players for the full
 					// pzLocked window, and an aggressor (pzLocked flag) for
 					// pzLockedAggressor. CONDITION_INFIGHT keeps its vanilla duration
 					// so skull/icon mechanics stay untouched.
