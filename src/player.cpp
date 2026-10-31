@@ -431,11 +431,13 @@ uint32_t Player::getClientIcons() const
 		icons |= ICON_REDSWORDS;
 	}
 
+	// TibiaFun: the swords stay visible inside a protection zone. The fight
+	// goes on there (CONDITION_INFIGHT keeps ticking and the logout stays
+	// blocked, see ProtocolGame::logout), and a 7.x player reads the icon as
+	// "I may not log out yet" — hiding it, as upstream does, showed a clear
+	// status bar to a player the server still treated as fighting.
 	if (tile && tile->hasFlag(TILESTATE_PROTECTIONZONE)) {
 		icons |= ICON_PIGEON;
-
-		// Don't show ICON_SWORDS if player is in protection zone.
-		icons &= ~ICON_SWORDS;
 	}
 
 	return icons;
